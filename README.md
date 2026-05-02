@@ -1,6 +1,6 @@
-# Synergistic VIS-DSM Learning for Deepfake Detection and Localization in Satellite Imagery
+# Synergistic Optical-DSM Learning for Deepfake Geography Detection and Localization in Satellite Imagery
 
-The code and datasets for Synergistic VIS-DSM Learning for Deepfake Detection and Localization in Satellite Imagery.
+The code and datasets for Synergistic Optical-DSM Learning for Deepfake Geography Detection and Localization in Satellite Imagery.
 
 # Data preprocessing
 
