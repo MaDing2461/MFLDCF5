@@ -14,7 +14,7 @@ runs/
 wandb/
 
 # datasets
-data/
+# data/
 dataset/
 datasets/
 
