@@ -18,18 +18,24 @@ FAKE-VAIHINGEN-MM & FAKE-POTSDAM-MM
 |   +---Fake-Potsdam-DSM
 |   |   +---test
 |   |   |   +---gt_dsm
-|   |   |   +---gt_generated_place
+|   |   |   +---gt_generated_place_dsm
+|   |   |   +---inpainted_gray_dsm
 |   |   |   +---inpainted_mask
+|   |   |   +---lama_gray_dsm
 |   |   |   +---lama_gt
 |   |   |   +---lama_mask
+|   |   |   +---repaint_gray_dsm
 |   |   |   +---repaint_gt
 |   |   |   \---repaint_mask
 |   |   \---train
 |   |       +---gt_dsm
-|   |       +---gt_generated_place
+|   |       +---gt_generated_place_dsm
+|   |       +---inpainted_gray_dsm
 |   |       +---inpainted_mask
+|   |       +---lama_gray_dsm
 |   |       +---lama_gt
 |   |       +---lama_mask
+|   |       +---repaint_gray_dsm
 |   |       +---repaint_gt
 |   |       \---repaint_mask
 
@@ -65,32 +71,32 @@ FAKE-VAIHINGEN-MM & FAKE-POTSDAM-MM
     |   +---gt_mask
     |   +---test
     |   |   +---gt_dsm
-    |   |   +---gt_generated_place
-    |   |   +---inpainted_gray
+    |   |   +---gt_generated_place_dsm
+    |   |   +---inpainted_gray_dsm
     |   |   +---inpainted_mask
     |   |   +---inpainted_mask_gray
     |   |   +---inpainted_rgb
-    |   |   +---lama_gray
+    |   |   +---lama_gray_dsm
     |   |   +---lama_gt
     |   |   +---lama_mask
     |   |   +---lama_rgb
-    |   |   +---repaint_gray
+    |   |   +---repaint_gray_dsm
     |   |   +---repaint_gt
     |   |   +---repaint_mask
     |   |   \---repaint_rgb
     |   \---train
     |       +---gt_draft
     |       +---gt_dsm
-    |       +---gt_geanerated_place
-    |       +---inpainted_gray
+    |       +---gt_generated_place_dsm
+    |       +---inpainted_gray_dsm
     |       +---inpainted_mask
     |       +---inpainted_mask_gray
     |       +---inpainted_rgb
-    |       +---lama_gray
+    |       +---lama_gray_dsm
     |       +---lama_gt
     |       +---lama_mask
     |       +---lama_rgb
-    |       +---repaint_gray
+    |       +---repaint_gray_dsm
     |       +---repaint_gt
     |       +---repaint_mask
     |       \---repaint_rgb
