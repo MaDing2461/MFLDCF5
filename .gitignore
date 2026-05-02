@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+
+# editor/system files
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# logs
+logs/
+runs/
+wandb/
+
+# datasets
+data/
+dataset/
+datasets/
+
+# pretrained weights / checkpoints
+*.pth
+*.pt
+*.ckpt
+*.pkl
+*.onnx
+pretrain/
+checkpoints/
+weights/
+
+# large pretrained weights
+src/model/FLDCF2/pretrain/
+src/model/scunet/pretrain/
+*.pth
