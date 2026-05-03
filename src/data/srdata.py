@@ -62,21 +62,45 @@ class SRData(data.Dataset):
                 )
                 if args.dsm_option == True:
                     if args.data_train_dir=="fakeV":
-                        self.dir_lr_dsm.replace('/media/lscsc/nas/mading/data/fakeV_dsm', path_bin),
+                        # self.dir_lr_dsm.replace('/media/lscsc/nas/mading/data/fakeV_dsm', path_bin),
+                        os.makedirs(
+                            os.path.join(
+                                # if args.data_train_dir=="fakeV":
+                                self.dir_lr_dsm.replace('/media/lscsc/nas/mading/data/fakeV_dsm', path_bin),
+                                # elif args.data_train_dir=="fake_Potsdam":
+                                #     self.dir_lr_dsm.replace('/media/lscsc/nas/mading/data/fake_Potsdam_dsm', path_bin),
+                                # self.dir_lr_dsm,
+                                #self.dir_lr_dsm = os.path.join('/media/lscsc/nas/mading/data/fakeV_dsm', 'train/inpainted_gray') #ignore this one
+                                'X{}'.format(args.scale)
+                            ),
+                            exist_ok=True
+                        )
                     elif args.data_train_dir=="fake_Potsdam":
-                        self.dir_lr_dsm.replace('/media/lscsc/nas/mading/data/fake_Potsdam_dsm', path_bin),
-                    os.makedirs(
-                        os.path.join(
-                            # if args.data_train_dir=="fakeV":
-                            #     self.dir_lr_dsm.replace('/media/lscsc/nas/mading/data/fakeV_dsm', path_bin),
-                            # elif args.data_train_dir=="fake_Potsdam":
-                            #     self.dir_lr_dsm.replace('/media/lscsc/nas/mading/data/fake_Potsdam_dsm', path_bin),
-                            self.dir_lr_dsm,
-                             #self.dir_lr_dsm = os.path.join('/media/lscsc/nas/mading/data/fakeV_dsm', 'train/inpainted_gray') #ignore this one
-                            'X{}'.format(args.scale)
-                        ),
-                        exist_ok=True
-                    )
+                        # self.dir_lr_dsm.replace('/media/lscsc/nas/mading/data/fake_Potsdam_dsm', path_bin),
+                        os.makedirs(
+                            os.path.join(
+                                # if args.data_train_dir=="fakeV":
+                                #     self.dir_lr_dsm.replace('/media/lscsc/nas/mading/data/fakeV_dsm', path_bin),
+                                # elif args.data_train_dir=="fake_Potsdam":
+                                self.dir_lr_dsm.replace('/media/lscsc/nas/mading/data/fake_Potsdam_dsm', path_bin),
+                                # self.dir_lr_dsm,
+                                #self.dir_lr_dsm = os.path.join('/media/lscsc/nas/mading/data/fakeV_dsm', 'train/inpainted_gray') #ignore this one
+                                'X{}'.format(args.scale)
+                            ),
+                            exist_ok=True
+                        )
+                    # os.makedirs(
+                    #     os.path.join(
+                    #         # if args.data_train_dir=="fakeV":
+                    #         #     self.dir_lr_dsm.replace('/media/lscsc/nas/mading/data/fakeV_dsm', path_bin),
+                    #         # elif args.data_train_dir=="fake_Potsdam":
+                    #         #     self.dir_lr_dsm.replace('/media/lscsc/nas/mading/data/fake_Potsdam_dsm', path_bin),
+                    #         self.dir_lr_dsm,
+                    #          #self.dir_lr_dsm = os.path.join('/media/lscsc/nas/mading/data/fakeV_dsm', 'train/inpainted_gray') #ignore this one
+                    #         'X{}'.format(args.scale)
+                    #     ),
+                    #     exist_ok=True
+                    # )
                 if args.dsm_option == True:
                     self.images_hr, self.images_lr, self.images_dsm = [], [], []    
                 else:
@@ -119,21 +143,45 @@ class SRData(data.Dataset):
                 )
                 if args.dsm_option == True:
                     if args.data_train_dir=="fakeV":
-                        self.dir_test_lr_dsm.replace('/media/lscsc/nas/mading/data/fakeV_dsm', path_bin)
+                        # self.dir_test_lr_dsm.replace('/media/lscsc/nas/mading/data/fakeV_dsm', path_bin)
+                        os.makedirs(
+                            os.path.join(
+                                # if args.data_train_dir=="fakeV":
+                                self.dir_test_lr_dsm.replace('/media/lscsc/nas/mading/data/fakeV_dsm', path_bin),
+                                # elif args.data_train_dir=="fake_Potsdam":
+                                #     self.dir_test_lr_dsm.replace('/media/lscsc/nas/mading/data/fake_Potsdam_dsm', path_bin), 
+                                # self.dir_test_lr_dsm,
+                                #self.dir_test_lr_dsm = os.path.join('/media/lscsc/nas/mading/data/fakeV_dsm', 'test/inpainted_gray') #ignore this one
+                                'X{}'.format(args.scale)
+                            ),
+                            exist_ok=True
+                        )
                     elif args.data_train_dir=="fake_Potsdam":
-                        self.dir_test_lr_dsm.replace('/media/lscsc/nas/mading/data/fake_Potsdam_dsm', path_bin)
-                    os.makedirs(
-                        os.path.join(
-                            # if args.data_train_dir=="fakeV":
-                            #     self.dir_test_lr_dsm.replace('/media/lscsc/nas/mading/data/fakeV_dsm', path_bin),
-                            # elif args.data_train_dir=="fake_Potsdam":
-                            #     self.dir_test_lr_dsm.replace('/media/lscsc/nas/mading/data/fake_Potsdam_dsm', path_bin), 
-                            self.dir_test_lr_dsm,
-                            #self.dir_test_lr_dsm = os.path.join('/media/lscsc/nas/mading/data/fakeV_dsm', 'test/inpainted_gray') #ignore this one
-                            'X{}'.format(args.scale)
-                        ),
-                        exist_ok=True
-                    )
+                        # self.dir_test_lr_dsm.replace('/media/lscsc/nas/mading/data/fake_Potsdam_dsm', path_bin)
+                        os.makedirs(
+                            os.path.join(
+                                # if args.data_train_dir=="fakeV":
+                                #     self.dir_test_lr_dsm.replace('/media/lscsc/nas/mading/data/fakeV_dsm', path_bin),
+                                # elif args.data_train_dir=="fake_Potsdam":
+                                self.dir_test_lr_dsm.replace('/media/lscsc/nas/mading/data/fake_Potsdam_dsm', path_bin), 
+                                # self.dir_test_lr_dsm,
+                                #self.dir_test_lr_dsm = os.path.join('/media/lscsc/nas/mading/data/fakeV_dsm', 'test/inpainted_gray') #ignore this one
+                                'X{}'.format(args.scale)
+                            ),
+                            exist_ok=True
+                        )
+                    # os.makedirs(
+                    #     os.path.join(
+                    #         # if args.data_train_dir=="fakeV":
+                    #         #     self.dir_test_lr_dsm.replace('/media/lscsc/nas/mading/data/fakeV_dsm', path_bin),
+                    #         # elif args.data_train_dir=="fake_Potsdam":
+                    #         #     self.dir_test_lr_dsm.replace('/media/lscsc/nas/mading/data/fake_Potsdam_dsm', path_bin), 
+                    #         self.dir_test_lr_dsm,
+                    #         #self.dir_test_lr_dsm = os.path.join('/media/lscsc/nas/mading/data/fakeV_dsm', 'test/inpainted_gray') #ignore this one
+                    #         'X{}'.format(args.scale)
+                    #     ),
+                    #     exist_ok=True
+                    # )
                 
                 if args.dsm_option == True:
                     self.images_hr, self.images_lr, self.images_dsm = [], [], []
