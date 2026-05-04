@@ -24,6 +24,11 @@ from utils.miou import get_iou,get_Acc
 interp = torch.nn.Upsample(size=(256, 256), mode='bilinear', align_corners=True)
 
 
+FORENSICHUB_IML_VIT_MODELS = ('ForensicHub__IML_ViT', 'ForensicHub_IML_ViT', 'ForensicHub_IMLViT')
+FORENSICHUB_MESORCH_MODELS = ('ForensicHub_Mesorch', 'ForensicHub__Mesorch', 'ForensicHub_MesOrch')
+FORENSICHUB_MASK_TARGET_MODELS = FORENSICHUB_IML_VIT_MODELS + FORENSICHUB_MESORCH_MODELS
+
+
 # myid = ['24_1','24_2','24_3', '24_4', '1_1','1_2','1_3','1_4','5_2','5_3','65_1','65_2']
 
 class Trainer():
@@ -118,7 +123,8 @@ class Trainer():
 
                 self.optimizer.zero_grad()
                 # out = self.model(lr, dsm)
-                out = self.model(lr, None)
+                model_target = hr if self.args.model in FORENSICHUB_MASK_TARGET_MODELS else None
+                out = self.model(lr, model_target)
                 # out = self.model(lr) 
                 # def loss_calc(self,out,label, out_label, model)
                 # print('out', out.size())
@@ -181,7 +187,8 @@ class Trainer():
                 # print('-'*50)
                 
 
-                out = self.model(lr, dsm)
+                model_target = hr if self.args.model in FORENSICHUB_MASK_TARGET_MODELS else dsm
+                out = self.model(lr, model_target)
                 # out = self.model(lr)
                 # out = self.model(lr) 
                 # def loss_calc(self,out,label, out_label, model)
@@ -294,7 +301,8 @@ class Trainer():
             # draw heatmap
                 # t1 = time.time()
                 if (self.args.heatmap) == False:
-                    result = self.model(lr, dsm)
+                    model_target = None if self.args.model in FORENSICHUB_MASK_TARGET_MODELS else dsm
+                    result = self.model(lr, model_target)
                 elif (self.args.heatmap) == True:
                     result, heatmap1, heatmap2, heatmap3 = self.model(lr, dsm)
 
@@ -402,12 +410,12 @@ class Trainer():
         #     t2 = time.time()
         #     t_all.append(t2 - t1)
 
-        print('average time:', np.mean(t_all))
-        print('average fps:', 1 / np.mean(t_all))
-        print('fastest time:', min(t_all))
-        print('fastest fps:', 1 / min(t_all))
-        print('slowest time:', max(t_all))
-        print('slowest fps:', 1 / max(t_all))
+        # print('average time:', np.mean(t_all))
+        # print('average fps:', 1 / np.mean(t_all))
+        # print('fastest time:', min(t_all))
+        # print('fastest fps:', 1 / min(t_all))
+        # print('slowest time:', max(t_all))
+        # print('slowest fps:', 1 / max(t_all))
 
         self.ckp.write_log('Saving...')
 

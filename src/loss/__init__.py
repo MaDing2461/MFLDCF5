@@ -18,6 +18,11 @@ from torch.nn.modules.loss import _Loss
 import math
 from skimage.metrics import peak_signal_noise_ratio as psnr1 
 
+FORENSICHUB_CLIP_L14_MODELS = ('ForensicHub_Clip-ViT-L/14', 'ForensicHub_ClipViTL14')
+FORENSICHUB_IML_VIT_MODELS = ('ForensicHub__IML_ViT', 'ForensicHub_IML_ViT', 'ForensicHub_IMLViT')
+FORENSICHUB_MESORCH_MODELS = ('ForensicHub_Mesorch', 'ForensicHub__Mesorch', 'ForensicHub_MesOrch')
+
+
 class SoftDiceLoss(_Loss):
     '''
     Soft_Dice = 2*|dot(A, B)| / (|dot(A, A)| + |dot(B, B)| + eps)
@@ -83,6 +88,129 @@ class Loss_fake(nn.modules.loss._Loss):
                                                  'after_softmax', 'raw'])
         self.softmax = torch.nn.Softmax(dim=1)
         self.image_loss_function = nn.L1Loss()
+
+    def _classification_logits(self, out):
+        if hasattr(out, 'logits_labels'):
+            logits = out.logits_labels
+        elif isinstance(out, dict):
+            logits = None
+            for key in ('logits_labels', 'logits', 'pred', 'cls_pred'):
+                if key in out:
+                    logits = out[key]
+                    break
+            if logits is None:
+                raise KeyError('Could not find classification logits in GenD output dict')
+        elif isinstance(out, (tuple, list)):
+            logits = self._classification_logits(out[0])
+        else:
+            logits = out
+
+        if not torch.is_tensor(logits):
+            raise TypeError(f'GenD classification logits must be a tensor, got {type(logits)}')
+
+        if logits.dim() == 1:
+            logits = logits.unsqueeze(0)
+        elif logits.dim() > 2:
+            logits = logits.flatten(2).mean(dim=2)
+
+        return logits
+
+    def _forensichub_clip_mask_logits(self, out):
+        if isinstance(out, dict):
+            for key in ('pred_mask_logits', 'mask_logits', 'logits', 'pred_mask'):
+                if key in out:
+                    out = out[key]
+                    break
+        elif isinstance(out, (tuple, list)):
+            out = out[0]
+
+        if not torch.is_tensor(out):
+            raise TypeError(f'ForensicHub Clip-ViT-L/14 mask logits must be a tensor, got {type(out)}')
+        if out.dim() == 3:
+            out = out.unsqueeze(1)
+        if out.dim() != 4:
+            raise ValueError(f'ForensicHub Clip-ViT-L/14 mask logits must be BCHW, got {tuple(out.shape)}')
+        return out
+
+    def _forensichub_iml_mask_logits(self, out):
+        if isinstance(out, dict):
+            for key in ('pred_mask_logits', 'mask_logits', 'logits', 'pred_mask'):
+                if key in out:
+                    out = out[key]
+                    break
+        elif isinstance(out, (tuple, list)):
+            out = out[0]
+
+        if not torch.is_tensor(out):
+            raise TypeError(f'ForensicHub IML_ViT mask logits must be a tensor, got {type(out)}')
+        if out.dim() == 3:
+            out = out.unsqueeze(1)
+        if out.dim() != 4:
+            raise ValueError(f'ForensicHub IML_ViT mask logits must be BCHW, got {tuple(out.shape)}')
+        return out
+
+    def _forensichub_iml_pred_mask(self, out):
+        if isinstance(out, dict) and torch.is_tensor(out.get('pred_mask')):
+            pred = out['pred_mask']
+        else:
+            pred = torch.sigmoid(self._forensichub_iml_mask_logits(out))
+
+        if pred.dim() == 3:
+            pred = pred.unsqueeze(1)
+        if pred.dim() != 4:
+            raise ValueError(f'ForensicHub IML_ViT pred_mask must be BCHW, got {tuple(pred.shape)}')
+        return pred
+
+    def _forensichub_mesorch_mask_logits(self, out):
+        if isinstance(out, dict):
+            for key in ('pred_mask_logits', 'mask_logits', 'logits', 'pred_mask'):
+                if key in out:
+                    out = out[key]
+                    break
+        elif isinstance(out, (tuple, list)):
+            out = out[0]
+
+        if not torch.is_tensor(out):
+            raise TypeError(f'ForensicHub Mesorch mask logits must be a tensor, got {type(out)}')
+        if out.dim() == 3:
+            out = out.unsqueeze(1)
+        if out.dim() != 4:
+            raise ValueError(f'ForensicHub Mesorch mask logits must be BCHW, got {tuple(out.shape)}')
+        return out
+
+    def _forensichub_mesorch_pred_mask(self, out):
+        if isinstance(out, dict) and torch.is_tensor(out.get('pred_mask')):
+            pred = out['pred_mask']
+        else:
+            pred = torch.sigmoid(self._forensichub_mesorch_mask_logits(out))
+
+        if pred.dim() == 3:
+            pred = pred.unsqueeze(1)
+        if pred.dim() != 4:
+            raise ValueError(f'ForensicHub Mesorch pred_mask must be BCHW, got {tuple(pred.shape)}')
+        return pred
+
+    def _forensichub_iml_edge_mask(self, fake_label):
+        edge_width = int(os.environ.get('FORENSICHUB_IML_VIT_EDGE_MASK_WIDTH', 7))
+        edge_width = max(edge_width, 1)
+        if edge_width % 2 == 0:
+            edge_width += 1
+
+        kernel = torch.zeros(
+            (1, 1, edge_width, edge_width),
+            device=fake_label.device,
+            dtype=fake_label.dtype,
+        )
+        center = edge_width // 2
+        kernel[0, 0, center:center + 1, :] = 1
+        kernel[0, 0, :, center:center + 1] = 1
+
+        binary = (fake_label > 0.5).to(fake_label.dtype)
+        dilated_fake = (F.conv2d(binary, kernel, padding=center) > 0).to(fake_label.dtype)
+        dilated_real = (F.conv2d(1 - binary, kernel, padding=center) > 0).to(fake_label.dtype)
+        edge = (-torch.abs(dilated_real - dilated_fake) + 1 > 0).to(fake_label.dtype)
+        return edge
+
     def loss_calc(self,out,label, out_label, model):
         out_label=out_label.type(torch.long)
         if(model=='crnet' or model=='my2' or model=='FLDCF_multiModal' or model=='FLDCF_multiModal_TransUNet'):
@@ -130,6 +258,73 @@ class Loss_fake(nn.modules.loss._Loss):
             #label = Variable(label.long()).cuda()
             corss = 0.2*self.criterion2(pred.view(pred.size(0), -1), label.view(label.size(0), -1)) + 0.8*self.SoftDice(pred.view(pred.size(0), -1), label.view(label.size(0), -1))
             loss = corss
+        if(model=='ForensicHub_Segformer-b3'):
+            pred = out
+            fake_pred = 1 - pred
+            fake_label = 1 - label.to(pred.device).float()
+
+            fake_pred_flat = fake_pred.view(fake_pred.size(0), -1)
+            fake_label_flat = fake_label.view(fake_label.size(0), -1)
+            pos = fake_label_flat.sum()
+            neg = fake_label_flat.numel() - pos
+            fake_weight = (neg / (pos + 1e-6)).clamp(1.0, 10.0).detach()
+            eps = 1e-6
+            bce = -(
+                fake_weight * fake_label_flat * torch.log(fake_pred_flat + eps)
+                + (1 - fake_label_flat) * torch.log(1 - fake_pred_flat + eps)
+            ).mean()
+            dice = self.SoftDice(fake_pred_flat, fake_label_flat)
+            loss = 0.2 * bce + 0.8 * dice
+        if model in FORENSICHUB_CLIP_L14_MODELS:
+            fake_logits = self._forensichub_clip_mask_logits(out)
+            fake_label = 1 - label.to(fake_logits.device).float()
+            if fake_label.dim() == 3:
+                fake_label = fake_label.unsqueeze(1)
+            fake_label = fake_label.clamp(0, 1)
+            if fake_label.shape[-2:] != fake_logits.shape[-2:]:
+                fake_label = F.interpolate(fake_label, size=fake_logits.shape[-2:], mode='nearest')
+
+            # Matches ForensicHub's generic localization objective:
+            # F.binary_cross_entropy_with_logits(out, kwargs['mask'].float()).
+            loss = F.binary_cross_entropy_with_logits(fake_logits, fake_label)
+        if model in FORENSICHUB_IML_VIT_MODELS:
+            if isinstance(out, dict) and torch.is_tensor(out.get('backward_loss')):
+                loss = out['backward_loss']
+                return loss
+
+            fake_logits = self._forensichub_iml_mask_logits(out)
+            fake_label = 1 - label.to(fake_logits.device).float()
+            if fake_label.dim() == 3:
+                fake_label = fake_label.unsqueeze(1)
+            fake_label = fake_label.clamp(0, 1)
+            if fake_label.shape[-2:] != fake_logits.shape[-2:]:
+                fake_label = F.interpolate(fake_label, size=fake_logits.shape[-2:], mode='nearest')
+
+            edge_lambda = float(os.environ.get('FORENSICHUB_IML_VIT_EDGE_LAMBDA', 20))
+            if isinstance(out, dict) and 'edge_lambda' in out:
+                edge_lambda = float(out['edge_lambda'])
+
+            edge_mask = self._forensichub_iml_edge_mask(fake_label)
+            predict_loss = F.binary_cross_entropy_with_logits(fake_logits, fake_label)
+            edge_loss = F.binary_cross_entropy_with_logits(
+                fake_logits,
+                fake_label,
+                weight=edge_mask,
+            ) * edge_lambda
+            loss = edge_loss + predict_loss
+        if model in FORENSICHUB_MESORCH_MODELS:
+            if isinstance(out, dict) and torch.is_tensor(out.get('backward_loss')):
+                loss = out['backward_loss']
+                return loss
+
+            fake_pred = self._forensichub_mesorch_pred_mask(out)
+            fake_label = 1 - label.to(fake_pred.device).float()
+            if fake_label.dim() == 3:
+                fake_label = fake_label.unsqueeze(1)
+            fake_label = fake_label.clamp(0, 1)
+            if fake_label.shape[-2:] != fake_pred.shape[-2:]:
+                fake_label = F.interpolate(fake_label, size=fake_pred.shape[-2:], mode='nearest')
+            loss = F.binary_cross_entropy(fake_pred, fake_label)
         if(model == 'ForensicsSAM'):
             # ForensicsSAM返回 (mask_pred, cls_pred)
             from .forensics_sam import ForensicsSAMLoss
@@ -148,10 +343,19 @@ class Loss_fake(nn.modules.loss._Loss):
             loss, loss_dict = self.forensics_sam_loss(mask_pred, label_mask, cls_pred, label_cls)
         if(model =='face' or model =='deepfake'):
             loss = self.fake(out,out_label)
-        if(model=='NPR-DeepfakeDetection' or model=='GenD'):
-            out_label =  Variable(out_label, requires_grad=False)
-            pred, real_or = out
-            loss = self.fake(pred, out_label)
+        # Old NPR-DeepfakeDetection loss kept for history and intentionally disabled.
+        # if(model=='NPR-DeepfakeDetection'):
+        #     out_label =  Variable(out_label, requires_grad=False)
+        #     pred, real_or = out
+        #     loss = self.fake(pred, out_label)
+        if(model=='NPR-DeepfakeDetection'):
+            pred = self._classification_logits(out)
+            target = Variable(out_label.view(-1).long().to(pred.device), requires_grad=False)
+            loss = self.fake(pred, target)
+        if(model=='GenD'):
+            pred = self._classification_logits(out)
+            target = Variable(out_label.view(-1).long().to(pred.device), requires_grad=False)
+            loss = self.fake(pred, target)
         # if(model=='NPR-DeepfakeDetection'):
         #     pred, real_or = out
         #     label = Variable(label.long()).cuda()
@@ -196,16 +400,17 @@ class Loss_fake(nn.modules.loss._Loss):
             gan=self.fake(real_or,out_label)
             loss = cross+gan
             # loss = cross
-        if(model == 'segformer'):
-            # SegFormer: identical to FLDCF_multiModal_TransUNet
-            # Output: (pred_seg, pred_cls) where pred_seg is (B, 2, H, W) and pred_cls is (B, 2)
-            pred, real_or = out
-            b, c, w, h = pred.size()
-            label = Variable(label.long()).cuda()
-            corss = self.criterion(pred, label) 
-            gan = self.fake(real_or, out_label)
-            loss = corss + gan
-        if(model == 'ClipViTL14' or model=='crnet' or model=='my2' or model=='FLDCF_multiModal' or model=='FLDCF_multiModal_TransUNet' or model=='EfficientNet'):
+        # if(model == 'segformer'):
+        #     # SegFormer: identical to FLDCF_multiModal_TransUNet
+        #     # Output: (pred_seg, pred_cls) where pred_seg is (B, 2, H, W) and pred_cls is (B, 2)
+        #     pred, real_or = out
+        #     b, c, w, h = pred.size()
+        #     label = Variable(label.long()).cuda()
+        #     corss = self.criterion(pred, label) 
+        #     gan = self.fake(real_or, out_label)
+        #     loss = corss + gan
+        # if(model == 'ClipViTL14' or model=='crnet' or model=='my2' or model=='FLDCF_multiModal' or model=='FLDCF_multiModal_TransUNet' or model=='EfficientNet'):
+        if(model=='crnet' or model=='my2' or model=='FLDCF_multiModal' or model=='FLDCF_multiModal_TransUNet'):
             # All these models use the same output format: (segmentation, classification)
             pred, real_or = out
             b,c,w,h = pred.size()
@@ -217,7 +422,8 @@ class Loss_fake(nn.modules.loss._Loss):
         return loss
     
     def test_handle(self,out, model):
-        if(model=='crnet' or model=='my2' or model=='FLDCF_multiModal' or model=='FLDCF_multiModal_TransUNet' or model=='ClipViTL14' or model=='EfficientNet'):
+        # if(model=='crnet' or model=='my2' or model=='FLDCF_multiModal' or model=='FLDCF_multiModal_TransUNet' or model=='ClipViTL14' or model=='EfficientNet'):
+        if(model=='crnet' or model=='my2' or model=='FLDCF_multiModal' or model=='FLDCF_multiModal_TransUNet'):
             pred, real_or = out
             pred = pred.cpu().data[0].numpy()
             pred = np.asarray(np.argmax(pred, axis=0), dtype=int)
@@ -240,13 +446,38 @@ class Loss_fake(nn.modules.loss._Loss):
             pred = out
             pred = pred.cpu().numpy()
             return pred[0], None
-        if(model=='scunet' or model=='mvss' or model=='dfcn'):
+        if(model=='scunet' or model=='mvss' or model=='dfcn' or model=='ForensicHub_Segformer-b3'):
             pred = out
             pred = pred.cpu().data[0].numpy()
             pred[np.where(pred<0.5)] = int(0)
             pred[np.where(pred>=0.5)] = int(1)
             pred = np.asarray(pred, dtype=int)
             return pred[0], None
+        if model in FORENSICHUB_CLIP_L14_MODELS:
+            fake_logits = self._forensichub_clip_mask_logits(out)
+            fake_prob = torch.sigmoid(fake_logits)
+            real_pred = (fake_prob < 0.5).long()
+            pred = real_pred.cpu().data[0].numpy()
+            if pred.ndim == 3:
+                pred = pred[0]
+            pred = np.asarray(pred, dtype=int)
+            return pred, None
+        if model in FORENSICHUB_IML_VIT_MODELS:
+            fake_prob = self._forensichub_iml_pred_mask(out)
+            real_pred = (fake_prob < 0.5).long()
+            pred = real_pred.cpu().data[0].numpy()
+            if pred.ndim == 3:
+                pred = pred[0]
+            pred = np.asarray(pred, dtype=int)
+            return pred, None
+        if model in FORENSICHUB_MESORCH_MODELS:
+            fake_prob = self._forensichub_mesorch_pred_mask(out)
+            real_pred = (fake_prob < 0.5).long()
+            pred = real_pred.cpu().data[0].numpy()
+            if pred.ndim == 3:
+                pred = pred[0]
+            pred = np.asarray(pred, dtype=int)
+            return pred, None
         if(model =='face' or model =='deepfake'):
             _, predicted_eval = torch.max(out.data, 1)
             return None, predicted_eval
@@ -254,8 +485,17 @@ class Loss_fake(nn.modules.loss._Loss):
             classes, class_ = out
             _, predicted_eval = torch.max(class_.data, 1)
             return None, predicted_eval
-        if(model=='NPR-DeepfakeDetection' or model=='GenD'):
-            pred, real_or = out
+        # Old NPR-DeepfakeDetection test handler kept for history and intentionally disabled.
+        # if(model=='NPR-DeepfakeDetection'):
+        #     pred, real_or = out
+        #     _, predicted_eval = torch.max(pred.data, 1)
+        #     return None, predicted_eval
+        if(model=='NPR-DeepfakeDetection'):
+            pred = self._classification_logits(out)
+            _, predicted_eval = torch.max(pred.data, 1)
+            return None, predicted_eval
+        if(model=='GenD'):
+            pred = self._classification_logits(out)
             _, predicted_eval = torch.max(pred.data, 1)
             return None, predicted_eval
         ##############################
@@ -280,14 +520,14 @@ class Loss_fake(nn.modules.loss._Loss):
             _, predicted_eval = torch.max(real_or.data, 1)
             return pred[0], predicted_eval
             # return pred[0], None
-        if(model == 'segformer'):
-            # SegFormer: identical to FLDCF_multiModal_TransUNet
-            # Output: (pred_seg, pred_cls)
-            pred, real_or = out
-            pred = pred.cpu().data[0].numpy()
-            pred = np.asarray(np.argmax(pred, axis=0), dtype=int)
-            _, predicted_eval = torch.max(real_or.data, 1)
-            return pred, predicted_eval
+        # if(model == 'segformer'):
+        #     # SegFormer: identical to FLDCF_multiModal_TransUNet
+        #     # Output: (pred_seg, pred_cls)
+        #     pred, real_or = out
+        #     pred = pred.cpu().data[0].numpy()
+        #     pred = np.asarray(np.argmax(pred, axis=0), dtype=int)
+        #     _, predicted_eval = torch.max(real_or.data, 1)
+        #     return pred, predicted_eval
         if(model=='ForensicsSAM'):
             # ForensicsSAM返回 (mask_pred, cls_pred) 或 mask_pred
             if isinstance(out, tuple):

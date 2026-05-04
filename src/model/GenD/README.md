@@ -1,215 +1,170 @@
-# GenD: Generative Deepfake Detection Model
-## 完整的fakedetect框架兼容实现
+# Deepfake Detection that Generalizes Across Benchmarks (WACV 2026)
 
-### 概述
+[![arXiv Badge](https://img.shields.io/badge/arXiv-B31B1B?logo=arxiv&logoColor=FFF)](https://arxiv.org/abs/2508.06248)
+[![Hugging Face Badge](https://img.shields.io/badge/Hugging%20Face-FFD21E?logo=huggingface&logoColor=000)](https://huggingface.co/collections/yermandy/gend)
 
-本实现基于 [GenD 原始GitHub仓库](https://github.com/yermandy/GenD)，但进行了优化以与fakedetect框架完全兼容。
+This is the official repository for the paper:
 
-### 架构组件
+**[Deepfake Detection that Generalizes Across Benchmarks](https://arxiv.org/abs/2508.06248)**.
 
-#### 1. **特征提取器（Feature Extractor）**
+### Abstract
 
-GenD提供了三种骨干网络：
+> The generalization of deepfake detectors to unseen manipulation techniques remains a challenge for practical deployment. Although many approaches adapt foundation models by introducing significant architectural complexity, this work demonstrates that robust generalization is achievable through a parameter-efficient adaptation of one of the foundational pre-trained vision encoders. The proposed method, GenD, fine-tunes only the Layer Normalization parameters (0.03% of the total) and enhances generalization by enforcing a hyperspherical feature manifold using L2 normalization and metric learning on it.
+>
+> We conducted an extensive evaluation on 14 benchmark datasets spanning from 2019 to 2025. The proposed method achieves state-of-the-art performance, outperforming more complex, recent approaches in average cross-dataset AUROC. Our analysis yields two primary findings for the field: 1) training on paired real-fake data from the same source video is essential for mitigating shortcut learning and improving generalization, and 2) detection difficulty on academic datasets has not strictly increased over time, with models trained on older, diverse datasets showing strong generalization capabilities.
+>
+> This work delivers a computationally efficient and reproducible method, proving that state-of-the-art generalization is attainable by making targeted, minimal changes to a pre-trained foundational image encoder model.
 
-- **CLIPBackbone**：使用ResNet50以模拟CLIP的特征提取能力
-  - 输出维度：2048
-  - 适合通用深造检测任务
+## Inference using Hugging Face transformers
 
-- **DINOBackbone**：基于Vision Transformer的自监督学习
-  - 输出维度：2048
-  - 提供更好的语义理解
+This example shows how to run inference with the pretrained GenD model from Hugging Face without other dependencies except `torch` and `transformers`. It expects that input images are already preprocessed by detector.
 
-- **PerceptionBackbone**：感知增强的多尺度特征提取
-  - 输出维度：2048
-  - 增强对细微伪造迹象的捕捉
+### Minimal dependencies
 
-#### 2. **分类头（Classification Head）**
-
-LinearHead类提供：
-- L2归一化的输入处理
-- 线性映射到类别数
-- 返回归一化嵌入向量
-
-```python
-logits, embeddings = head(features)  # (B, num_classes), (B, feature_dim)
+``` bash
+conda create --name GenD python=3.12 uv -y
+conda activate GenD
+uv pip install torch==2.8.0 torchvision==0.23.0 transformers==4.56.2
 ```
 
-#### 3. **模型输出格式**
+### Inference with transformers
 
-为与fakedetect框架兼容，GenD返回元组：
+``` python
+import requests
+import torch
+from PIL import Image
 
-```python
-logits, embeddings = model(x)
-# logits: (batch_size, num_classes) - 分类logits
-# embeddings: (batch_size, feature_dim) - L2归一化嵌入
+from src.hf.modeling_gend import GenD
+
+# Other models can be found in https://huggingface.co/collections/yermandy/gend
+# - yermandy/GenD_CLIP_L_14
+# - yermandy/GenD_PE_L
+# - yermandy/GenD_DINOv3_L
+model = GenD.from_pretrained("yermandy/GenD_CLIP_L_14")
+
+urls = [
+    "https://github.com/yermandy/deepfake-detection/blob/main/datasets/FF/DF/000_003/000.png?raw=true",
+    "https://github.com/yermandy/deepfake-detection/blob/main/datasets/FF/real/000/000.png?raw=true",
+]
+images = [Image.open(requests.get(url, stream=True).raw) for url in urls]
+tensors = torch.stack([model.feature_extractor.preprocess(img) for img in images])
+logits = model(tensors)
+probs = logits.softmax(dim=-1)
+
+print(probs)
 ```
 
-### 多模态支持
+## Inference using Gradio UI
 
-#### GenDMultiModal
+We provide a Gradio-based web UI for inference, install all dependencies as described in the [Training](#training) section, then run:
 
-支持RGB + DSM（数字地表模型）融合：
-
-```python
-logits, embeddings = model(rgb_image, dsm_image)
+``` bash
+python app/run.py
 ```
 
-融合过程：
-1. RGB路径通过CLIPBackbone
-2. DSM路径通过单独的GenD分支
-3. 特征连接和融合
-4. 最终分类和L2归一化
+![gradio-demo-app](media/gradio.png)
 
-### 集成点
+## Training
 
-#### 在model/__init__.py中的加载
+### Datasets
 
-```python
-if name == 'GenD':
-    from .GenD.gend_full import GenD
-    return GenD(args, num_classes=2, backbone='clip', pretrained=False).cuda()
+To facilitate reproducibility, preprocessed training, validation, and test datasets were uploaded to [Hugging Face](https://huggingface.co/datasets/yermandy/GenD).
+
+### Set up environment
+
+``` bash
+conda create --name GenD python=3.12 uv -y
+conda activate GenD
+uv pip install -r requirements.txt
 ```
 
-#### Loss计算（loss/__init__.py）
+### Minimal example without external data
 
-GenD与NPR-DeepfakeDetection共享同一loss分支：
+#### Training example
 
-```python
-if(model=='NPR-DeepfakeDetection' or model=='GenD'):
-    pred, real_or = out
-    loss = self.criterion(pred, real)  # CrossEntropyLoss
+Examine `src/exp/examples.py`, each experiment name is defined as a key, a value overrides default configuration of `Config` object from `src/config.py`. For example, try to run `example-training` experiment:
+
+``` bash
+python run_exp.py example-training
 ```
 
-#### 测试评估（loss/__init__.py）
+#### Test example after the model is trained
 
-在test_handle中：
-
-```python
-if(model=='NPR-DeepfakeDetection' or model=='GenD'):
-    pred, real_or = out
-    _, predicted_eval = torch.max(pred.data, 1)
-    return None, predicted_eval
+``` bash
+python run_exp.py example-test --from_exp example-training --test
 ```
 
-### 训练参数
+Alternatively, you can try inference using one of our released models from Hugging Face:
 
-#### 推荐配置
-
-```bash
-# 基础训练（无DSM）
-python src/main.py \
-  --data_train_dir fakeV \
-  --dsm_option False \
-  --data_train Vaihingen \
-  --model GenD \
-  --save GenD__Fake_Vaihingen
-
-# 多模态训练（RGB+DSM）
-python src/main.py \
-  --data_train_dir fakeV \
-  --dsm_option True \
-  --data_train Vaihingen \
-  --model GenD \
-  --save GenD__Fake_Vaihingen__MultiModal
+``` bash
+python run_exp.py GenD_CLIP--CDFv2-example --test
+python run_exp.py GenD_PE--CDFv2-example --test
+python run_exp.py GenD_DINO--CDFv2-example --test
 ```
 
-#### 关键参数
+### Full training
 
-- `backbone`: 骨干网络类型 ('clip', 'dino', 'perception')
-- `pretrained`: 是否使用预训练权重 (default: False)
-- `num_classes`: 分类类别数 (default: 2)
-- `normalize_head`: 头部输入归一化 (default: False)
-- `use_l2_norm`: 嵌入L2归一化 (default: True)
+To fully train the model, you need to download datasets, preprocess them, and create files with paths to the images.
 
-### 性能指标（初步结果）
+The training entry will be similar to the minimal example above.
 
-在Vaihingen假车辆检测数据集上的性能：
+All experiments (configs) from the paper are stored in the `src/exp` folder.
 
-| Epoch | F1 Score | Accuracy | Precision | Recall |
-|-------|----------|----------|-----------|--------|
-| 1     | 0.2471   | 0.7562   | 0.6774    | 0.1511 |
-| 2     | 0.5705   | 0.7505   | 0.5241    | 0.6259 |
-| 3     | 0.2182   | 0.7543   | 0.6923    | 0.1295 |
+#### Prepare the dataset
 
-**注**：初期训练不稳定，建议继续训练以达到收敛。
+Take for example [FaceForensics++](https://github.com/ondyari/FaceForensics) dataset, follow these steps:
 
-### 文件结构
+1. Download the dataset first from the [official source](https://github.com/ondyari/FaceForensics). The root of this dataset is `./FaceForensics`
 
-```
-src/model/GenD/
-├── __init__.py           # 模块加载器
-├── gend_full.py          # 完整实现
-│   ├── LinearHead        # 分类头
-│   ├── CLIPBackbone      # CLIP风格骨干
-│   ├── DINOBackbone      # DINO骨干
-│   ├── PerceptionBackbone # 感知骨干
-│   ├── GenD              # 单模态GenD
-│   ├── GenDMultiModal    # 多模态GenD
-│   └── get_gend_model()  # 工厂函数
-└── simple_wrapper.py     # 简化包装版本（兼容）
+2. Preprocess the dataset using `detector.py` script:
+
+``` bash
+python detector.py -i FaceForensics/manipulated_sequences/Deepfakes/c23/videos/ --mask_folder FaceForensics/masks/manipulated_sequences/Deepfakes/masks/videos/ -m at_least -n 32 -o datasets/FF/DF/ --det_thres 0.1 -s 1.3 --target_size none
 ```
 
-### 扩展说明
+Repeat the process for other manipulation methods and real videos. After processing everything, you will get a similar structure:
 
-#### 自定义骨干网络
-
-要添加新的骨干网络：
-
-```python
-class CustomBackbone(nn.Module):
-    def __init__(self, pretrained=False):
-        super().__init__()
-        # 初始化模型
-        self.features = ...
-        self.feature_dim = 2048
-    
-    def forward(self, x):
-        return self.features(x).view(x.size(0), -1)
-    
-    def get_feature_dim(self):
-        return self.feature_dim
+``` bash
+datasets
+└── FF
+    ├── DF
+    │   └── 000_003
+    │       ├── 025.png
+    │       └── 038.png
+    ├── F2F
+    │   └── 000_003
+    │       ├── 019.png
+    │       └── 029.png
+    ├── FS
+    │   └── 000_003
+    │       ├── 019.png
+    │       └── 029.png
+    ├── NT
+    │   └── 000_003
+    │       ├── 019.png
+    │       └── 029.png
+    └── real
+        └── 000
+            ├── 025.png
+            └── 038.png
 ```
 
-#### 添加自定义头部
+3. Create files with paths to images similar to the ones in `config/datasets` directory. It can be done using:
 
-```python
-class CustomHead(nn.Module):
-    def forward(self, x):
-        logits = ...  # 分类
-        embeddings = ...  # 特征
-        return logits, embeddings
+``` bash
+find datasets/FF/DF/* -type f | sort > config/datasets/FF/DF.txt
 ```
 
-### 与框架的兼容性
+We manage links to files using `src/utils/files.py`.
 
-✅ **完全兼容特性**：
-- ✓ 返回(logits, embeddings)元组格式
-- ✓ 支持loss_calc()分支处理
-- ✓ 支持test_handle()评估管道
-- ✓ 支持DSM多模态输入
-- ✓ GPU训练和推理
-- ✓ 检查点保存和恢复
+### Cite
 
-### 依赖项
-
-GenD完整实现的最小依赖：
-
+``` bibtex
+@inproceedings{GenD,
+    title        = {Deepfake detection that generalizes across benchmarks},
+    author       = {Yermakov, Andrii and Cech, Jan and Matas, Jiri and Fritz, Mario},
+    year         = 2026,
+    booktitle    = {Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision},
+    pages        = {773--783}
+}
 ```
-torch
-torchvision
-numpy
-```
-
-无需额外的外部依赖（与原GenD的复杂依赖不同）。
-
-### 后续工作
-
-1. **优化骨干网络**：实验不同的ResNet变体
-2. **添加辅助损失**：实现对齐和均匀性正则化
-3. **特征可视化**：添加t-SNE/UMAP可视化
-4. **多源融合**：支持更多模态（红外、热成像等）
-
-### 参考文献
-
-- 原GenD论文及实现：https://github.com/yermandy/GenD
-- 与fakedetect框架集成：基于NPR-DeepfakeDetection的设计模式

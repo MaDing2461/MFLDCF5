@@ -43,6 +43,179 @@ from .FLDCF_multiModal.FLDCF_multiModal import CONFIGS as CONFIGS_ViT_seg
 # /media/lscsc/nas/mading/fakedetect/src/model/FLDCF_multiModal/FLDCF_multiModal.py
 # /media/lscsc/nas/mading/fakedetect/src/model/FLDCF_multiModal/model/vitcross_seg_modeling.py
 
+
+def _env_flag(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.lower() in ('1', 'true', 'yes', 'y', 'on')
+
+
+FORENSICHUB_IML_VIT_MODEL_NAMES = (
+    'ForensicHub__IML_ViT',
+    'ForensicHub_IML_ViT',
+    'ForensicHub_IMLViT',
+)
+FORENSICHUB_MESORCH_MODEL_NAMES = (
+    'ForensicHub_Mesorch',
+    'ForensicHub__Mesorch',
+    'ForensicHub_MesOrch',
+)
+FORENSICHUB_MASK_TARGET_MODEL_NAMES = FORENSICHUB_IML_VIT_MODEL_NAMES + FORENSICHUB_MESORCH_MODEL_NAMES
+
+
+class GenDMFLDCFAdapter(nn.Module):
+    """
+    Adapter for yermandy/GenD so it can be trained by this repository's
+    Trainer/Loss_fake pipeline. The pipeline expects classification models to
+    return a tuple, so forward returns (logits, logits).
+    """
+    DEFAULT_BACKBONE = 'openai/clip-vit-large-patch14'
+    DEFAULT_HEAD = 'linear'
+    DEFAULT_UNFREEZE_LAYERS = (
+        'pre_layrnorm',
+        'layer_norm1',
+        'layer_norm2',
+        'post_layernorm',
+    )
+    CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
+    CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
+
+    def __init__(self, args):
+        super().__init__()
+        os.environ.setdefault('HF_ENDPOINT', 'https://hf-mirror.com')
+        self.args = args
+        self.input_rgb_range = float(getattr(args, 'rgb_range', 1))
+        self.normalize_input = _env_flag('GEND_NORMALIZE_INPUT', True)
+        self.resize_input = _env_flag('GEND_RESIZE_INPUT', True)
+
+        try:
+            from .GenD.src.hf.modeling_gend import GenD, GenDConfig
+        except ModuleNotFoundError as exc:
+            if exc.name == 'transformers':
+                raise ModuleNotFoundError(
+                    'GenD requires transformers. Install the lightweight dependencies with: '
+                    'pip install transformers==4.56.2'
+                ) from exc
+            raise
+
+        checkpoint = getattr(args, 'gend_checkpoint', None) or os.environ.get('GEND_CHECKPOINT')
+        backbone = (
+            getattr(args, 'gend_backbone', None)
+            or os.environ.get('GEND_BACKBONE')
+            or self.DEFAULT_BACKBONE
+        )
+        head = getattr(args, 'gend_head', None) or os.environ.get('GEND_HEAD') or self.DEFAULT_HEAD
+
+        print('==> Building GenD model...')
+        if checkpoint:
+            print(f'GenD checkpoint: {checkpoint}')
+            self.gend = GenD.from_pretrained(checkpoint)
+        else:
+            print(f'GenD backbone: {backbone}')
+            print(f'GenD head: {head}')
+            self.gend = GenD(GenDConfig(backbone=backbone, head=head))
+
+        self.target_size = self._get_processor_size()
+        mean, std = self._get_processor_stats()
+        self.register_buffer('image_mean', torch.tensor(mean).view(1, 3, 1, 1), persistent=False)
+        self.register_buffer('image_std', torch.tensor(std).view(1, 3, 1, 1), persistent=False)
+
+        self._set_trainable_parameters()
+        self._print_trainable_summary()
+
+    def _get_image_processor(self):
+        processor = getattr(self.gend.feature_extractor, '_preprocess', None)
+        return getattr(processor, 'image_processor', processor)
+
+    def _get_processor_size(self):
+        image_processor = self._get_image_processor()
+        size = getattr(image_processor, 'crop_size', None) or getattr(image_processor, 'size', None)
+        if isinstance(size, dict):
+            height = size.get('height') or size.get('shortest_edge') or 224
+            width = size.get('width') or size.get('shortest_edge') or height
+            return int(height), int(width)
+        if isinstance(size, (list, tuple)):
+            if len(size) == 1:
+                return int(size[0]), int(size[0])
+            return int(size[0]), int(size[1])
+        if isinstance(size, int):
+            return size, size
+        return 224, 224
+
+    def _get_processor_stats(self):
+        image_processor = self._get_image_processor()
+        mean = getattr(image_processor, 'image_mean', self.CLIP_MEAN)
+        std = getattr(image_processor, 'image_std', self.CLIP_STD)
+        if mean is None:
+            mean = self.CLIP_MEAN
+        if std is None:
+            std = self.CLIP_STD
+        return mean, std
+
+    def _set_trainable_parameters(self):
+        freeze_feature_extractor = getattr(self.args, 'gend_freeze_feature_extractor', None)
+        if freeze_feature_extractor is None:
+            freeze_feature_extractor = _env_flag('GEND_FREEZE_FEATURE_EXTRACTOR', True)
+
+        if freeze_feature_extractor:
+            self.gend.feature_extractor.requires_grad_(False)
+
+        unfreeze_layers = getattr(self.args, 'gend_unfreeze_layers', None)
+        if unfreeze_layers is None:
+            env_layers = os.environ.get('GEND_UNFREEZE_LAYERS')
+            if env_layers is None:
+                unfreeze_layers = self.DEFAULT_UNFREEZE_LAYERS
+            else:
+                unfreeze_layers = tuple(layer.strip() for layer in env_layers.split(',') if layer.strip())
+        elif isinstance(unfreeze_layers, str):
+            unfreeze_layers = tuple(layer.strip() for layer in unfreeze_layers.split(',') if layer.strip())
+
+        if unfreeze_layers:
+            for name, param in self.gend.feature_extractor.named_parameters():
+                if any(layer in name for layer in unfreeze_layers):
+                    param.requires_grad = True
+
+    def _print_trainable_summary(self):
+        all_params = sum(param.numel() for param in self.parameters())
+        trainable_params = sum(param.numel() for param in self.parameters() if param.requires_grad)
+        ratio = 100 * trainable_params / all_params if all_params else 0
+        print(
+            'GenD trainable params: {:.2f}M / {:.2f}M ({:.4f}%)'.format(
+                trainable_params / 1e6,
+                all_params / 1e6,
+                ratio,
+            )
+        )
+
+    def _prepare_inputs(self, x):
+        if x.dim() != 4:
+            raise ValueError(f'GenD expects BCHW input, got shape {tuple(x.shape)}')
+
+        x = x.float()
+        if x.size(1) == 1:
+            x = x.repeat(1, 3, 1, 1)
+        elif x.size(1) > 3:
+            x = x[:, :3, :, :]
+
+        if self.input_rgb_range != 1:
+            x = x / self.input_rgb_range
+
+        x = x.clamp(0, 1)
+
+        if self.resize_input and x.shape[-2:] != self.target_size:
+            x = F.interpolate(x, size=self.target_size, mode='bicubic', align_corners=False)
+
+        if self.normalize_input:
+            x = (x - self.image_mean) / self.image_std
+
+        return x
+
+    def forward(self, x, y=None):
+        outputs = self.gend(self._prepare_inputs(x))
+        logits = outputs.logits_labels if hasattr(outputs, 'logits_labels') else outputs
+        return logits, logits
+
 def get_model(name,args):
     if name == 'crnet':
         from .crnet_small.crnet import CDnetV1_MODEL as M
@@ -73,12 +246,12 @@ def get_model(name,args):
     if(name=='mvss'):
         from .mvss.mvssnet import get_mvss
 
-        print('==> Building model..')
-        model = get_mvss(args, num_classes=2).cuda()
-        dummy_input = torch.randn(1, 3, 256, 256).cuda()
-        flops, params = profile(model, inputs=(dummy_input,))
-        print('flops: ', flops, 'params: ', params)
-        print('flops: %.2f G, params: %.2f M' % (flops / 1000000000.0, params / 1000000.0))
+        # print('==> Building model..')
+        # model = get_mvss(args, num_classes=2).cuda()
+        # dummy_input = torch.randn(1, 3, 256, 256).cuda()
+        # flops, params = profile(model, inputs=(dummy_input,))
+        # print('flops: ', flops, 'params: ', params)
+        # print('flops: %.2f G, params: %.2f M' % (flops / 1000000000.0, params / 1000000.0))
 
         return get_mvss(backbone='resnet50',
                              pretrained_base=True,
@@ -88,82 +261,81 @@ def get_model(name,args):
                              n_input=3).cuda()
     if(name =='movenet'): # SE-Network
         from .movenet.movenet import Movenet as M
-    if name == 'segformer':
         # Lightweight SegFormer-like model for compatibility
-        from .segformer.segformer import create_segformer as M_create
-        print('==> Building SegFormer...')
-        try:
-            model = M_create(args=None, num_classes=1).cuda()
-        except Exception:
-            model = M_create(args=None, num_classes=1)
+        # from .segformer.segformer import create_segformer as M_create
+        # print('==> Building SegFormer...')
+        # try:
+        #     model = M_create(args=None, num_classes=1).cuda()
+        # except Exception:
+        #     model = M_create(args=None, num_classes=1)
 
-        # compute FLOPs / Params / Memory / Speed for input 1x3x256x256
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        dummy_input = torch.randn(1, 3, 256, 256).to(device)
-        try:
-            model = model.to(device)
-            flops, params = profile(model, inputs=(dummy_input,), verbose=False)
-            flops_g = flops / 1e9
-            params_m = params / 1e6
-            print(f'FLOPs: {flops_g:.2f}G')
-            print(f'Parameters: {params_m:.2f}M')
-        except Exception as e:
-            print(f'Warning: Could not compute FLOPs/Params: {e}')
-            flops_g, params_m = 0, 0
+        # # compute FLOPs / Params / Memory / Speed for input 1x3x256x256
+        # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # dummy_input = torch.randn(1, 3, 256, 256).to(device)
+        # try:
+        #     model = model.to(device)
+        #     flops, params = profile(model, inputs=(dummy_input,), verbose=False)
+        #     flops_g = flops / 1e9
+        #     params_m = params / 1e6
+        #     print(f'FLOPs: {flops_g:.2f}G')
+        #     print(f'Parameters: {params_m:.2f}M')
+        # except Exception as e:
+        #     print(f'Warning: Could not compute FLOPs/Params: {e}')
+        #     flops_g, params_m = 0, 0
 
-        # Memory
-        try:
-            if torch.cuda.is_available():
-                torch.cuda.reset_peak_memory_stats(device=device)
-                torch.cuda.empty_cache()
-                model.eval()
-                with torch.no_grad():
-                    _ = model(dummy_input)
-                memory_allocated = torch.cuda.max_memory_allocated(device=device)
-                memory_mb = memory_allocated / (1024 ** 2)
-                print(f'Memory: {memory_mb:.2f}MB')
-            else:
-                memory_mb = 0
-        except Exception as e:
-            print(f'Warning: Could not compute memory: {e}')
-            memory_mb = 0
+        # # Memory
+        # try:
+        #     if torch.cuda.is_available():
+        #         torch.cuda.reset_peak_memory_stats(device=device)
+        #         torch.cuda.empty_cache()
+        #         model.eval()
+        #         with torch.no_grad():
+        #             _ = model(dummy_input)
+        #         memory_allocated = torch.cuda.max_memory_allocated(device=device)
+        #         memory_mb = memory_allocated / (1024 ** 2)
+        #         print(f'Memory: {memory_mb:.2f}MB')
+        #     else:
+        #         memory_mb = 0
+        # except Exception as e:
+        #     print(f'Warning: Could not compute memory: {e}')
+        #     memory_mb = 0
 
-        # Speed (FPS)
-        try:
-            model.eval()
-            if torch.cuda.is_available():
-                torch.cuda.synchronize(device=device)
-            with torch.no_grad():
-                for _ in range(3):
-                    _ = model(dummy_input)
-            if torch.cuda.is_available():
-                torch.cuda.synchronize(device=device)
-            num_iterations = 10
-            start_time = time.time()
-            with torch.no_grad():
-                for _ in range(num_iterations):
-                    _ = model(dummy_input)
-            if torch.cuda.is_available():
-                torch.cuda.synchronize(device=device)
-            end_time = time.time()
-            elapsed_time = end_time - start_time
-            fps = num_iterations / elapsed_time if elapsed_time > 0 else 0
-            print(f'Speed: {fps:.2f}FPS')
-        except Exception as e:
-            print(f'Warning: Could not compute speed: {e}')
-            fps = 0
+        # # Speed (FPS)
+        # try:
+        #     model.eval()
+        #     if torch.cuda.is_available():
+        #         torch.cuda.synchronize(device=device)
+        #     with torch.no_grad():
+        #         for _ in range(3):
+        #             _ = model(dummy_input)
+        #     if torch.cuda.is_available():
+        #         torch.cuda.synchronize(device=device)
+        #     num_iterations = 10
+        #     start_time = time.time()
+        #     with torch.no_grad():
+        #         for _ in range(num_iterations):
+        #             _ = model(dummy_input)
+        #     if torch.cuda.is_available():
+        #         torch.cuda.synchronize(device=device)
+        #     end_time = time.time()
+        #     elapsed_time = end_time - start_time
+        #     fps = num_iterations / elapsed_time if elapsed_time > 0 else 0
+        #     print(f'Speed: {fps:.2f}FPS')
+        # except Exception as e:
+        #     print(f'Warning: Could not compute speed: {e}')
+        #     fps = 0
 
-        print('=' * 60)
-        print('SegFormer Model Summary:')
-        print(f'  Input Size: 1x3x256x256')
-        print('-' * 60)
-        print(f'  FLOPs: {flops_g:.2f}G')
-        print(f'  Parameters: {params_m:.2f}M')
-        print(f'  Memory: {memory_mb:.2f}MB')
-        print(f'  Speed: {fps:.2f}FPS')
-        print('=' * 60)
+        # print('=' * 60)
+        # print('SegFormer Model Summary:')
+        # print(f'  Input Size: 1x3x256x256')
+        # print('-' * 60)
+        # print(f'  FLOPs: {flops_g:.2f}G')
+        # print(f'  Parameters: {params_m:.2f}M')
+        # print(f'  Memory: {memory_mb:.2f}MB')
+        # print(f'  Speed: {fps:.2f}FPS')
+        # print('=' * 60)
 
-        return model
+        # return model
     if(name =='FLDCF_multiModal'): # FLDCF2
         from .FLDCF_multiModal.FLDCF_multiModal import FLDCF_multiModal as M
         config_vit = CONFIGS_ViT_seg['R50-ViT-B_16']
@@ -208,169 +380,32 @@ def get_model(name,args):
 
         # return M(args, config_vit), config_vit
     
-    if(name == 'ClipViTL14'): # CLIP Vision Transformer Large 14
-        from .ClipViTL14.ClipViTL14 import ClipViTL14 as M
-        from .ClipViTL14.ClipViTL14 import get_model_performance_metrics
         
-        print('==> Building ClipViTL14 model...')
-        model = M(args, num_classes=2, pretrained=True).cuda()
         
-        # Compute and print performance metrics
-        print('==> Computing ClipViTL14 performance metrics...')
-        dummy_input = torch.randn(1, 3, 256, 256).cuda()
-        
-        try:
-            flops, params = profile(model, inputs=(dummy_input,), verbose=False)
-            flops_g = flops / 1e9
-            params_m = params / 1e6
-            print(f'FLOPs: {flops_g:.2f}G')
-            print(f'Parameters: {params_m:.2f}M')
-        except Exception as e:
-            print(f'Warning: Could not compute FLOPs and Parameters: {e}')
-            flops_g, params_m = 0, 0
-        
-        # Compute memory usage
-        try:
-            torch.cuda.reset_peak_memory_stats(device='cuda')
-            torch.cuda.empty_cache()
-            
-            model.eval()
-            with torch.no_grad():
-                _ = model(dummy_input)
-            
-            memory_allocated = torch.cuda.max_memory_allocated(device='cuda')
-            memory_mb = memory_allocated / (1024 ** 2)
-            print(f'Memory: {memory_mb:.2f}MB')
-        except Exception as e:
-            print(f'Warning: Could not compute memory: {e}')
-            memory_mb = 0
-        
-        # Compute speed (FPS)
-        try:
-            model.eval()
-            torch.cuda.synchronize(device='cuda')
-            
-            # Warm up
-            with torch.no_grad():
-                for _ in range(3):
-                    _ = model(dummy_input)
-            
-            torch.cuda.synchronize(device='cuda')
-            
-            # Timing
-            num_iterations = 10
-            start_time = time.time()
-            
-            with torch.no_grad():
-                for _ in range(num_iterations):
-                    _ = model(dummy_input)
-            
-            torch.cuda.synchronize(device='cuda')
-            end_time = time.time()
-            
-            elapsed_time = end_time - start_time
-            fps = num_iterations / elapsed_time if elapsed_time > 0 else 0
-            print(f'Speed: {fps:.2f}FPS')
-        except Exception as e:
-            print(f'Warning: Could not compute speed: {e}')
-            fps = 0
-        
-        # Print summary
-        print('=' * 60)
-        print('ClipViTL14 Model Summary:')
-        print(f'  Input Size: 1x3x256x256')
-        print('-' * 60)
-        print(f'  FLOPs: {flops_g:.2f}G')
-        print(f'  Parameters: {params_m:.2f}M')
-        print(f'  Memory: {memory_mb:.2f}MB')
-        print(f'  Speed: {fps:.2f}FPS')
-        print('=' * 60)
-        
-        return model, None
-    
-    if(name == 'EfficientNet'): # EfficientNet model for fake detection
-        from .EfficientNet.EfficientNet import EfficientNet as M
-        
-        print('==> Building EfficientNet model...')
-        model = M(args, num_classes=2, pretrained=True).cuda()
-        
-        # Compute and print performance metrics
-        print('==> Computing EfficientNet performance metrics...')
-        dummy_input = torch.randn(1, 3, 256, 256).cuda()
-        
-        try:
-            flops, params = profile(model, inputs=(dummy_input,), verbose=False)
-            flops_g = flops / 1e9
-            params_m = params / 1e6
-            print(f'FLOPs: {flops_g:.2f}G')
-            print(f'Parameters: {params_m:.2f}M')
-        except Exception as e:
-            print(f'Warning: Could not compute FLOPs/Params: {e}')
-            flops_g = 0
-            params_m = 0
-        
-        try:
-            torch.cuda.reset_peak_memory_stats()
-            torch.cuda.empty_cache()
-            
-            with torch.no_grad():
-                _ = model(dummy_input)
-            
-            memory_allocated = torch.cuda.max_memory_allocated()
-            memory_mb = memory_allocated / (1024 ** 2)
-            print(f'Memory: {memory_mb:.2f}MB')
-        except Exception as e:
-            print(f'Warning: Could not compute Memory: {e}')
-            memory_mb = 0
-        
-        try:
-            num_iterations = 100
-            
-            # Warm up
-            with torch.no_grad():
-                for _ in range(10):
-                    _ = model(dummy_input)
-            
-            start_time = time.time()
-            
-            with torch.no_grad():
-                for _ in range(num_iterations):
-                    _ = model(dummy_input)
-            
-            torch.cuda.synchronize(device='cuda')
-            end_time = time.time()
-            
-            elapsed_time = end_time - start_time
-            fps = num_iterations / elapsed_time if elapsed_time > 0 else 0
-            print(f'Speed: {fps:.2f}FPS')
-        except Exception as e:
-            print(f'Warning: Could not compute speed: {e}')
-            fps = 0
-        
-        # Print summary
-        print('=' * 60)
-        print('EfficientNet Model Summary:')
-        print(f'  Input Size: 1x3x256x256')
-        print('-' * 60)
-        print(f'  FLOPs: {flops_g:.2f}G')
-        print(f'  Parameters: {params_m:.2f}M')
-        print(f'  Memory: {memory_mb:.2f}MB')
-        print(f'  Speed: {fps:.2f}FPS')
-        print('=' * 60)
-        
-        return model, None
     
     # if name == 'crnet':
         # from .crnet_small.crnet import CDnetV1_MODEL as M
-    # NPR-DeepfakeDetection
+    # Old NPR-DeepfakeDetection hook kept for history and intentionally disabled.
+    # if name == 'NPR-DeepfakeDetection':
+    #     from .NPR_DeepfakeDetection.trainer import Trainer1 as M
+    #     return M(args).cuda()
+    #     # return Trainer()
     if name == 'NPR-DeepfakeDetection':
-        from .NPR_DeepfakeDetection.trainer import Trainer1 as M
-        return M(args).cuda()
-        # return Trainer()
+        from .NPR_DeepfakeDetection import NPRDeepfakeDetector
+        return NPRDeepfakeDetector(args)
+    if name == 'ForensicHub_Segformer-b3':
+        from .ForensicHub import ForensicHubSegformerB3
+        return ForensicHubSegformerB3(args)
+    if name in FORENSICHUB_IML_VIT_MODEL_NAMES:
+        from .ForensicHub import ForensicHubIMLViT
+        return ForensicHubIMLViT(args)
+    if name in FORENSICHUB_MESORCH_MODEL_NAMES:
+        from .ForensicHub import ForensicHubMesorch
+        return ForensicHubMesorch(args)
+    
+
     if name == 'GenD':
-        # Use full GenD implementation with framework compatibility
-        from .GenD.gend_full import GenD
-        return GenD(args, num_classes=2, backbone='clip', pretrained=False).cuda()
+        return GenDMFLDCFAdapter(args)
     
     if name == 'ForensicsSAM':
         # ForensicsSAM: Forensic-focused Segment Anything Model
@@ -572,6 +607,8 @@ class Model(nn.Module):
             if (self.args.model == "FLDCF_multiModal" ):
                 # return self.model(x, y)  #train的正常情况
                 return self.model(x)  #train的正常情况
+            elif self.args.model in FORENSICHUB_MASK_TARGET_MODEL_NAMES:
+                return self.model(x, y)
             else: return self.model(x)  #train的正常情况
 
     def forward(self, x, y):
@@ -591,6 +628,8 @@ class Model(nn.Module):
             if (self.args.model == "FLDCF_multiModal" ):
                 return self.model(x, y)  #train的正常情况
                 # return self.model(x)  #train的正常情况
+            elif self.args.model in FORENSICHUB_MASK_TARGET_MODEL_NAMES:
+                return self.model(x, y)
             else: return self.model(x)  #train的正常情况
 
     def get_model(self):
@@ -728,4 +767,3 @@ class Model(nn.Module):
         output = output_cat.mean(dim=0, keepdim=True)
 
         return output
-

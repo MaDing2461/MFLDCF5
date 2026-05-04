@@ -249,7 +249,17 @@ class SRData(data.Dataset):
         self.ext = ('.png', '.png')
 
     def _check_and_load(self, ext, img, f, verbose=True):
-        if not os.path.isfile(f) or ext.find('reset') >= 0:
+        needs_reload = not os.path.isfile(f) or ext.find('reset') >= 0
+        if not needs_reload:
+            try:
+                with open(f, 'rb') as _f:
+                    pickle.load(_f)
+            except (EOFError, pickle.UnpicklingError, OSError):
+                needs_reload = True
+                if verbose:
+                    print('Rebuilding broken binary: {}'.format(f))
+
+        if needs_reload:
             if verbose:
                 print('Making a binary: {}'.format(f))
             with open(f, 'wb') as _f:

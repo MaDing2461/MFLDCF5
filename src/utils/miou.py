@@ -12,7 +12,7 @@ class ConfusionMatrix(object):
         self.M = np.zeros((nclass, nclass))
 
     def add(self, gt, pred):
-        assert(np.max(pred) <= self.nclass)
+        assert(np.max(pred) < self.nclass)
         assert(len(gt) == len(pred))
         for i in range(len(gt)):
             if not gt[i] == 255:
@@ -25,17 +25,23 @@ class ConfusionMatrix(object):
     def __str__(self):
         pass
 
+    @staticmethod
+    def _safe_divide(numerator, denominator):
+        if denominator == 0:
+            return 0.0
+        return numerator / denominator
+
     def recall(self):
         recall = 0.0
         for i in range(self.nclass):
-            recall += self.M[i, i] / np.sum(self.M[i, :])
+            recall += self._safe_divide(self.M[i, i], np.sum(self.M[i, :]))
 
         return recall/self.nclass
 
     def precision(self):
         precision = 0.0
         for i in range(self.nclass):
-            precision += self.M[i, i] / np.sum(self.M[:, i])
+            precision += self._safe_divide(self.M[i, i], np.sum(self.M[:, i]))
 
         return precision/self.nclass
 
@@ -48,7 +54,7 @@ class ConfusionMatrix(object):
     #     return recall/1
 
     def accuracy(self):
-        return np.sum(np.diag(self.M)) / np.sum(self.M)
+        return self._safe_divide(np.sum(np.diag(self.M)), np.sum(self.M))
 
     # def accuracy(self):
     #     accuracy = 0.0
@@ -59,20 +65,21 @@ class ConfusionMatrix(object):
     #     return accuracy/1
 
     def jaccard(self):
-        jaccard = 0.0
         jaccard_perclass = []
         for i in range(self.nclass):
-            if not self.M[i, i] == 0:
-                jaccard_perclass.append(self.M[i, i] / (np.sum(self.M[i, :]) + np.sum(self.M[:, i]) - self.M[i, i]))
+            denominator = np.sum(self.M[i, :]) + np.sum(self.M[:, i]) - self.M[i, i]
+            jaccard_perclass.append(self._safe_divide(self.M[i, i], denominator))
 
-        return np.sum(jaccard_perclass)/len(jaccard_perclass), jaccard_perclass, self.M
+        return np.mean(jaccard_perclass), jaccard_perclass, self.M
 
     def generateM(self, item):
         gt, pred = item
+        gt = gt.astype(np.int64)
+        pred = pred.astype(np.int64)
         m = np.zeros((self.nclass, self.nclass))
         assert(len(gt) == len(pred))
         for i in range(len(gt)):
-            if gt[i] < self.nclass: #and pred[i] < self.nclass:
+            if 0 <= gt[i] < self.nclass and 0 <= pred[i] < self.nclass:
                 m[gt[i], pred[i]] += 1.0
         return m
     
@@ -84,8 +91,8 @@ class ConfusionMatrix(object):
                 f1_scores.append(0.0)  
                 continue  
               
-            precision = self.M[i, i] / np.sum(self.M[i, :])  
-            recall = self.M[i, i] / np.sum(self.M[:, i])  
+            precision = self.M[i, i] / np.sum(self.M[:, i])  
+            recall = self.M[i, i] / np.sum(self.M[i, :])  
             f1 = 2 * (precision * recall) / (precision + recall)  
             f1_scores.append(f1)  
   
@@ -129,9 +136,13 @@ def get_iou(data_list, class_num, save_path=None):
     acc = ConfM.accuracy()
     mean_f1, f1 = ConfM.f1_score()
 
-    classes =np.array(('fake','real'))
+    default_classes = ('fake', 'real')
+    classes = np.array([
+        default_classes[i] if i < len(default_classes) else 'class_{}'.format(i)
+        for i in range(class_num)
+    ])
 
-    for i, iou in enumerate(j_list):
+    for i in range(class_num):
         print('class {:2d} {:12} IU {:.4f} F1 {:.4f}'.format(i, classes[i], j_list[i],f1[i]))
     print('meanIOU: {:.4f} Recall: {:.4f} Precision: {:.4f} Accuracy: {:.4f} F1: {:.4f}'.format(aveJ, recall, precision, acc, mean_f1))
 
@@ -143,8 +154,8 @@ def get_Acc(data_real,data_pre):
     test_p = data_pre
     f1 = f1_score(test_image_labels, test_p)
     acc = accuracy_score(test_image_labels, test_p)
-    precision = precision_score(test_image_labels, test_p)
-    recall = recall_score(test_image_labels, test_p)
+    precision = precision_score(test_image_labels, test_p, zero_division=0)
+    recall = recall_score(test_image_labels, test_p, zero_division=0)
     print("2026.4.2")
     print("Image F1 score: {:.4f} Accuracy: {:.4f} Precision: {:.4f} Recall: {:.4f}". format(f1,acc,precision, recall))
     return acc

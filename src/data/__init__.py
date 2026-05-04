@@ -20,6 +20,8 @@ class Data:
                 from .vaihingen import Vaihingen as D
             if module_name == 'VaihingenWithDSM':
                 from .vaihingenWithDSM import Vaihingen as D
+            if module_name == 'Potsdam':
+                from .potsdam import Potsdam as D
             if module_name == 'PotsdamWithDSM':
                 from .potsdamWithDSM import Vaihingen as D
                 # potsdamWithDSM
