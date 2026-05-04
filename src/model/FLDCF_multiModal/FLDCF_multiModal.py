@@ -58,36 +58,36 @@ def conv3x3(in_planes, out_planes, stride=1):
                      padding=1, bias=False)
 
 
-class BasicBlock(nn.Module):
-    expansion = 1
+# class BasicBlock(nn.Module):
+#     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super(BasicBlock, self).__init__()
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = nn.BatchNorm2d(planes, affine = affine_par)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(planes, planes)
-        self.bn2 = nn.BatchNorm2d(planes, affine = affine_par)
-        self.downsample = downsample
-        self.stride = stride
+#     def __init__(self, inplanes, planes, stride=1, downsample=None):
+#         super(BasicBlock, self).__init__()
+#         self.conv1 = conv3x3(inplanes, planes, stride)
+#         self.bn1 = nn.BatchNorm2d(planes, affine = affine_par)
+#         self.relu = nn.ReLU(inplace=True)
+#         self.conv2 = conv3x3(planes, planes)
+#         self.bn2 = nn.BatchNorm2d(planes, affine = affine_par)
+#         self.downsample = downsample
+#         self.stride = stride
 
-    def forward(self, x):
-        residual = x
+#     def forward(self, x):
+#         residual = x
 
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
+#         out = self.conv1(x)
+#         out = self.bn1(out)
+#         out = self.relu(out)
 
-        out = self.conv2(out)
-        out = self.bn2(out)
+#         out = self.conv2(out)
+#         out = self.bn2(out)
 
-        if self.downsample is not None:
-            residual = self.downsample(x)
+#         if self.downsample is not None:
+#             residual = self.downsample(x)
 
-        out += residual
-        out = self.relu(out)
+#         out += residual
+#         out = self.relu(out)
 
-        return out
+#         return out
 
 
 class Bottleneck(nn.Module):
@@ -156,19 +156,19 @@ class Bottleneck(nn.Module):
 
 
 
-class _ConvBNReLU(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0,
-                 dilation=1, groups=1, norm_layer=nn.BatchNorm2d):
-        super(_ConvBNReLU, self).__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias=False)
-        self.bn = norm_layer(out_channels)
-        self.relu = nn.ReLU(True)
+# class _ConvBNReLU(nn.Module):
+#     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0,
+#                  dilation=1, groups=1, norm_layer=nn.BatchNorm2d):
+#         super(_ConvBNReLU, self).__init__()
+#         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias=False)
+#         self.bn = norm_layer(out_channels)
+#         self.relu = nn.ReLU(True)
 
-    def forward(self, x):
-        x = self.conv(x)
-        x = self.bn(x)
-        x = self.relu(x)
-        return x
+#     def forward(self, x):
+#         x = self.conv(x)
+#         x = self.bn(x)
+#         x = self.relu(x)
+#         return x
 		
 		
 class _ASPPConv(nn.Module):
@@ -270,166 +270,166 @@ class BR(nn.Module):
 
         return out
     
-class BR2(nn.Module):
-    def __init__(self, num_classes, stride=1, downsample=None):
-        super(BR2, self).__init__()
-        self.conv1 = conv3x3(num_classes*2, num_classes*16, stride)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(num_classes*16, num_classes)
-        self.stride = stride
+# class BR2(nn.Module):
+#     def __init__(self, num_classes, stride=1, downsample=None):
+#         super(BR2, self).__init__()
+#         self.conv1 = conv3x3(num_classes*2, num_classes*16, stride)
+#         self.relu = nn.ReLU(inplace=True)
+#         self.conv2 = conv3x3(num_classes*16, num_classes)
+#         self.stride = stride
         
-        self.conv3 = conv3x3(num_classes*2, num_classes, stride)
+#         self.conv3 = conv3x3(num_classes*2, num_classes, stride)
 
-    def forward(self, x):
-        residual = x
+#     def forward(self, x):
+#         residual = x
 
-        out = self.conv1(x)
-        out = self.relu(out)
+#         out = self.conv1(x)
+#         out = self.relu(out)
 
-        out = self.conv2(out)
-        ################################
-        residual = self.conv3(residual)
+#         out = self.conv2(out)
+#         ################################
+#         residual = self.conv3(residual)
         
-        ################################
-        out += residual
+#         ################################
+#         out += residual
 
 
-        return out
+#         return out
 
-class RDB_Conv(nn.Module):
-    def __init__(self, inChannels, growRate, kSize=3):
-        super(RDB_Conv, self).__init__()
-        Cin = inChannels
-        G  = growRate
-        self.conv = nn.Sequential(*[
-            nn.Conv2d(Cin, G, kSize, padding=(kSize-1)//2, stride=1),
-            nn.ReLU()
-        ])
+# class RDB_Conv(nn.Module):
+#     def __init__(self, inChannels, growRate, kSize=3):
+#         super(RDB_Conv, self).__init__()
+#         Cin = inChannels
+#         G  = growRate
+#         self.conv = nn.Sequential(*[
+#             nn.Conv2d(Cin, G, kSize, padding=(kSize-1)//2, stride=1),
+#             nn.ReLU()
+#         ])
 
-    def forward(self, x):
-        out = self.conv(x)
-        return torch.cat((x, out), 1)
+#     def forward(self, x):
+#         out = self.conv(x)
+#         return torch.cat((x, out), 1)
 
-class RDB(nn.Module):
-    def __init__(self, growRate0, growRate, nConvLayers, kSize=3):
-        super(RDB, self).__init__()
-        G0 = growRate0
-        G  = growRate
-        C  = nConvLayers
+# class RDB(nn.Module):
+#     def __init__(self, growRate0, growRate, nConvLayers, kSize=3):
+#         super(RDB, self).__init__()
+#         G0 = growRate0
+#         G  = growRate
+#         C  = nConvLayers
         
-        convs = []
-        for c in range(C):
-            convs.append(RDB_Conv(G0 + c*G, G))
-        self.convs = nn.Sequential(*convs)
+#         convs = []
+#         for c in range(C):
+#             convs.append(RDB_Conv(G0 + c*G, G))
+#         self.convs = nn.Sequential(*convs)
         
-        # Local Feature Fusion
-        self.LFF = nn.Conv2d(G0 + C*G, G0, 1, padding=0, stride=1)
+#         # Local Feature Fusion
+#         self.LFF = nn.Conv2d(G0 + C*G, G0, 1, padding=0, stride=1)
 
-    def forward(self, x):
-        return self.LFF(self.convs(x)) + x
+#     def forward(self, x):
+#         return self.LFF(self.convs(x)) + x
 
 
-class Restoretrain(nn.Module):
-    def __init__(self, args):
-        super(Restoretrain, self).__init__()
-        G0 = 32
-        kSize = 3 #3
+# class Restoretrain(nn.Module):
+#     def __init__(self, args):
+#         super(Restoretrain, self).__init__()
+#         G0 = 32
+#         kSize = 3 #3
 
-        # number of RDB blocks, conv layers, out channels
-        self.D, C, G =  8, 2, 32
+#         # number of RDB blocks, conv layers, out channels
+#         self.D, C, G =  8, 2, 32
 
-        # Shallow feature extraction net
-        self.SFENet1 = nn.Conv2d(3, G0, kSize, padding=(kSize-1)//2, stride=1)
-        self.SFENet2 = nn.Conv2d(G0, G0, kSize, padding=(kSize-1)//2, stride=1)
+#         # Shallow feature extraction net
+#         self.SFENet1 = nn.Conv2d(3, G0, kSize, padding=(kSize-1)//2, stride=1)
+#         self.SFENet2 = nn.Conv2d(G0, G0, kSize, padding=(kSize-1)//2, stride=1)
 
-        # Redidual dense blocks and dense feature fusion
-        self.RDBs = nn.ModuleList()
-        for i in range(self.D):
-            self.RDBs.append(
-                RDB(growRate0 = G0, growRate = G, nConvLayers = C)
-            )
+#         # Redidual dense blocks and dense feature fusion
+#         self.RDBs = nn.ModuleList()
+#         for i in range(self.D):
+#             self.RDBs.append(
+#                 RDB(growRate0 = G0, growRate = G, nConvLayers = C)
+#             )
 
-        # Global Feature Fusion
-        self.GFF = nn.Sequential(*[
-            nn.Conv2d(self.D * G0, G0, 1, padding=0, stride=1),
-            nn.Conv2d(G0, G0, kSize, padding=(kSize-1)//2, stride=1)
-        ])
+#         # Global Feature Fusion
+#         self.GFF = nn.Sequential(*[
+#             nn.Conv2d(self.D * G0, G0, 1, padding=0, stride=1),
+#             nn.Conv2d(G0, G0, kSize, padding=(kSize-1)//2, stride=1)
+#         ])
 
-        # Up-sampling net
+#         # Up-sampling net
     
-        self.UPNet = nn.Sequential(*[
-            nn.Conv2d(G0, G, kSize, padding=(kSize-1)//2, stride=1),
-            nn.Conv2d(G, 3, kSize, padding=(kSize-1)//2, stride=1)
-        ])
+#         self.UPNet = nn.Sequential(*[
+#             nn.Conv2d(G0, G, kSize, padding=(kSize-1)//2, stride=1),
+#             nn.Conv2d(G, 3, kSize, padding=(kSize-1)//2, stride=1)
+#         ])
 
-    def forward(self, x):
-        f__1 = self.SFENet1(x)
-        x  = self.SFENet2(f__1)   #64 32 32
+#     def forward(self, x):
+#         f__1 = self.SFENet1(x)
+#         x  = self.SFENet2(f__1)   #64 32 32
 
-        RDBs_out = []
-        for i in range(self.D):
-            x = self.RDBs[i](x)
-            #draw_features(64, x[0],"./image/encoder{}.png".format(i))
-            RDBs_out.append(x) #64 32 32
+#         RDBs_out = []
+#         for i in range(self.D):
+#             x = self.RDBs[i](x)
+#             #draw_features(64, x[0],"./image/encoder{}.png".format(i))
+#             RDBs_out.append(x) #64 32 32
 
-        x = self.GFF(torch.cat(RDBs_out,1))
-        #draw_features(64, x[0],"./image/encoder{}.png".format(i))
-        x += f__1  #64 32 32
-        result = self.UPNet(x)
+#         x = self.GFF(torch.cat(RDBs_out,1))
+#         #draw_features(64, x[0],"./image/encoder{}.png".format(i))
+#         x += f__1  #64 32 32
+#         result = self.UPNet(x)
     
-        return result,RDBs_out
+#         return result,RDBs_out
 
 
-class Restoretest(nn.Module):
-    def __init__(self, args):
-        super(Restoretest, self).__init__()
-        G0 = 32
-        kSize = 3 #3
+# class Restoretest(nn.Module):
+#     def __init__(self, args):
+#         super(Restoretest, self).__init__()
+#         G0 = 32
+#         kSize = 3 #3
 
-        # number of RDB blocks, conv layers, out channels
-        self.D, C, G =  8, 2, 32
+#         # number of RDB blocks, conv layers, out channels
+#         self.D, C, G =  8, 2, 32
 
-        # Shallow feature extraction net
-        self.SFENet1 = nn.Conv2d(3, G0, kSize, padding=(kSize-1)//2, stride=1)
-        self.SFENet2 = nn.Conv2d(G0, G0, kSize, padding=(kSize-1)//2, stride=1)
+#         # Shallow feature extraction net
+#         self.SFENet1 = nn.Conv2d(3, G0, kSize, padding=(kSize-1)//2, stride=1)
+#         self.SFENet2 = nn.Conv2d(G0, G0, kSize, padding=(kSize-1)//2, stride=1)
 
-        # Redidual dense blocks and dense feature fusion
-        self.RDBs = nn.ModuleList()
-        for i in range(self.D):
-            self.RDBs.append(
-                RDB(growRate0 = G0, growRate = G, nConvLayers = C)
-            )
+#         # Redidual dense blocks and dense feature fusion
+#         self.RDBs = nn.ModuleList()
+#         for i in range(self.D):
+#             self.RDBs.append(
+#                 RDB(growRate0 = G0, growRate = G, nConvLayers = C)
+#             )
 
-        # Global Feature Fusion
-        self.GFF = nn.Sequential(*[
-            nn.Conv2d(self.D * G0, G0, 1, padding=0, stride=1),
-            nn.Conv2d(G0, G0, kSize, padding=(kSize-1)//2, stride=1)
-        ])
+#         # Global Feature Fusion
+#         self.GFF = nn.Sequential(*[
+#             nn.Conv2d(self.D * G0, G0, 1, padding=0, stride=1),
+#             nn.Conv2d(G0, G0, kSize, padding=(kSize-1)//2, stride=1)
+#         ])
 
-        # Up-sampling net
+#         # Up-sampling net
     
-        self.UPNet = nn.Sequential(*[
-            nn.Conv2d(G0, G, kSize, padding=(kSize-1)//2, stride=1),
-            nn.Conv2d(G, 3, kSize, padding=(kSize-1)//2, stride=1)
-        ])
+#         self.UPNet = nn.Sequential(*[
+#             nn.Conv2d(G0, G, kSize, padding=(kSize-1)//2, stride=1),
+#             nn.Conv2d(G, 3, kSize, padding=(kSize-1)//2, stride=1)
+#         ])
 
-    def forward(self, x):
-        with torch.no_grad():
-            f__1 = self.SFENet1(x)
-            x  = self.SFENet2(f__1)   #64 32 32
+#     def forward(self, x):
+#         with torch.no_grad():
+#             f__1 = self.SFENet1(x)
+#             x  = self.SFENet2(f__1)   #64 32 32
 
-            RDBs_out = []
-            for i in range(self.D):
-                x = self.RDBs[i](x)
-                #draw_features(64, x[0],"./image/encoder{}.png".format(i))
-                RDBs_out.append(x) #64 32 32
+#             RDBs_out = []
+#             for i in range(self.D):
+#                 x = self.RDBs[i](x)
+#                 #draw_features(64, x[0],"./image/encoder{}.png".format(i))
+#                 RDBs_out.append(x) #64 32 32
 
-            x = self.GFF(torch.cat(RDBs_out,1))
-            #draw_features(64, x[0],"./image/encoder{}.png".format(i))
-            x += f__1  #64 32 32
-            result = self.UPNet(x)
+#             x = self.GFF(torch.cat(RDBs_out,1))
+#             #draw_features(64, x[0],"./image/encoder{}.png".format(i))
+#             x += f__1  #64 32 32
+#             result = self.UPNet(x)
     
-        return result,RDBs_out
+#         return result,RDBs_out
 
 ################################################################
 def np2th(weights, conv=False):
@@ -1063,7 +1063,7 @@ class DecoderBlock(nn.Module):
             self.predict2 = self._predict_layer(skip_channels, num_classes=2)
         self.predict3 = self._predict_layer(num_classes+num_classes, num_classes=2)
         self.br1 = BR(num_classes=2)
-        self.br2 = BR2(num_classes=2)
+        # self.br2 = BR2(num_classes=2)
         ################################
         
         ################################
@@ -1119,12 +1119,12 @@ class DecoderBlock(nn.Module):
         return x #
 
 
-class SegmentationHead(nn.Sequential):
+# class SegmentationHead(nn.Sequential):
 
-    def __init__(self, in_channels, out_channels, kernel_size=3, upsampling=1):
-        conv2d = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=kernel_size // 2)
-        upsampling = nn.UpsamplingBilinear2d(scale_factor=upsampling) if upsampling > 1 else nn.Identity()
-        super().__init__(conv2d, upsampling)
+#     def __init__(self, in_channels, out_channels, kernel_size=3, upsampling=1):
+#         conv2d = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=kernel_size // 2)
+#         upsampling = nn.UpsamplingBilinear2d(scale_factor=upsampling) if upsampling > 1 else nn.Identity()
+#         super().__init__(conv2d, upsampling)
 
 
 class DecoderCup(nn.Module):
@@ -1178,9 +1178,9 @@ class DecoderCup(nn.Module):
         self.predict1_withoutfpm1 = _predict_layer(512, num_classes=2)
         # self.predict1 = _predict_layer(512*5+768, num_classes=2)
         self.br1 = BR(num_classes=2)
-        self.br5 = BR(num_classes=2)	
-        self.br6 = BR(num_classes=2)	
-        self.br7 = BR(num_classes=2)
+        # self.br5 = BR(num_classes=2)	
+        # self.br6 = BR(num_classes=2)	
+        # self.br7 = BR(num_classes=2)
 
         ################################
 
@@ -1248,32 +1248,32 @@ class FLDCF_multiModal(nn.Module): #FLDCF_multiModal
         # super(FLDCF_multiModal, self).__init__()
 
         ################################################################
-        self.num_classes_2 = num_classes_2
+        # self.num_classes_2 = num_classes_2
         self.zero_head = zero_head
         self.classifier = config.classifier
         self.transformer = Transformer(config, img_size, vis)
         self.decoder = DecoderCup(config)
-        self.segmentation_head = SegmentationHead(
-            in_channels=config['decoder_channels'][-1],
-            out_channels=config['n_classes'],
-            kernel_size=3,
-        )
+        # self.segmentation_head = SegmentationHead(
+        #     in_channels=config['decoder_channels'][-1],
+        #     out_channels=config['n_classes'],
+        #     kernel_size=3,
+        # )
         self.config = config
         # print(config.skip_channels)
         ################################################################
 
-        self.learned = 	Restoretest(args)
-        self.learned.load_state_dict(
-                # torch.load(
-                #     # os.path.join('./model', 'model_vi.pt'),
-                #     os.path.join('/media/lscsc/nas/mading/fakedetect/model', 'model_vi_gray.pt'),  
-                # ),
-                torch.load(
-                # os.path.join('./model', 'model_vi.pt'),
-                os.path.join('/media/lscsc/nas/mading/fakedetect/model', 'model_vi_sjl_rgb.pt'),  
-                ),
-                strict=True
-            )
+        # self.learned = 	Restoretest(args)
+        # self.learned.load_state_dict(
+        #         # torch.load(
+        #         #     # os.path.join('./model', 'model_vi.pt'),
+        #         #     os.path.join('/media/lscsc/nas/mading/fakedetect/model', 'model_vi_gray.pt'),  
+        #         # ),
+        #         torch.load(
+        #         # os.path.join('./model', 'model_vi.pt'),
+        #         os.path.join('/media/lscsc/nas/mading/fakedetect/model', 'model_vi_sjl_rgb.pt'),  
+        #         ),
+        #         strict=True
+        #     )
         
         self.handlelern1 = nn.Conv2d(32 *4,64, kernel_size=3, stride=2, padding=1, bias=False)
         self.handlelern2 = nn.Conv2d(32 *4,64, kernel_size=3, stride=2, padding=1, bias=False)
@@ -1290,10 +1290,10 @@ class FLDCF_multiModal(nn.Module): #FLDCF_multiModal
             i.requires_grad = False
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=True) # change
-        self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=1, dilation=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4)
+        # self.layer1 = self._make_layer(block, 64, layers[0])
+        # self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+        # self.layer3 = self._make_layer(block, 256, layers[2], stride=1, dilation=2)
+        # self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4)
 		
 		
         self.res5_con1x1 = nn.Sequential(
@@ -1387,55 +1387,55 @@ class FLDCF_multiModal(nn.Module): #FLDCF_multiModal
             nn.Dropout2d(0.1),
             nn.Conv2d(256, num_classes, kernel_size=3, stride=1, padding=1, bias=True))
 
-    def _make_layer(self, block, planes, blocks, stride=1, dilation=1):
-        downsample = None
-        if stride != 1 or self.inplanes != planes * block.expansion or dilation == 2 or dilation == 4:
-            downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion,affine = affine_par))
-        for i in downsample._modules['1'].parameters():
-            i.requires_grad = False
-        layers = []
-        layers.append(block(self.inplanes, planes, stride,dilation=dilation, downsample=downsample))
-        self.inplanes = planes * block.expansion
-        for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, dilation=dilation))
+    # def _make_layer(self, block, planes, blocks, stride=1, dilation=1):
+    #     downsample = None
+    #     if stride != 1 or self.inplanes != planes * block.expansion or dilation == 2 or dilation == 4:
+    #         downsample = nn.Sequential(
+    #             nn.Conv2d(self.inplanes, planes * block.expansion,
+    #                       kernel_size=1, stride=stride, bias=False),
+    #             nn.BatchNorm2d(planes * block.expansion,affine = affine_par))
+    #     for i in downsample._modules['1'].parameters():
+    #         i.requires_grad = False
+    #     layers = []
+    #     layers.append(block(self.inplanes, planes, stride,dilation=dilation, downsample=downsample))
+    #     self.inplanes = planes * block.expansion
+    #     for i in range(1, blocks):
+    #         layers.append(block(self.inplanes, planes, dilation=dilation))
 
-        return nn.Sequential(*layers)
+    #     return nn.Sequential(*layers)
 
     
-    def base_forward(self, x,RDNout):
-        # draw_features(64, RDNout[4][0],"{}/0.png".format('./image'))
-        # draw_features(64, RDNout[5][0],"{}/1.png".format('./image'))
-        # draw_features(64, RDNout[6][0],"{}/2.png".format('./image'))
-        # draw_features(64, RDNout[7][0],"{}/3.png".format('./image'))
-        rdn1 = self.handlelern1(torch.cat(RDNout[0:4], 1))
-        rdn2 = self.handlelern2(torch.cat(RDNout[4:8], 1))
-        x = self.relu(self.bn1(self.conv1(x)))
-        size_conv1 = x.size()[2:]
+    # def base_forward(self, x,RDNout):
+    #     # draw_features(64, RDNout[4][0],"{}/0.png".format('./image'))
+    #     # draw_features(64, RDNout[5][0],"{}/1.png".format('./image'))
+    #     # draw_features(64, RDNout[6][0],"{}/2.png".format('./image'))
+    #     # draw_features(64, RDNout[7][0],"{}/3.png".format('./image'))
+    #     rdn1 = self.handlelern1(torch.cat(RDNout[0:4], 1))
+    #     rdn2 = self.handlelern2(torch.cat(RDNout[4:8], 1))
+    #     x = self.relu(self.bn1(self.conv1(x)))
+    #     size_conv1 = x.size()[2:]
 
-        # print(x.shape)
-        # print(rdn1.shape)
-        # print(torch.cat([x, rdn1],dim=1).shape)
-        # print(abc)
+    #     # print(x.shape)
+    #     # print(rdn1.shape)
+    #     # print(torch.cat([x, rdn1],dim=1).shape)
+    #     # print(abc)
 
-        x = self.relu(self.bn2(self.conv2(torch.cat([x, rdn1],dim=1))))
-        # draw_features(64, rdn2[0],"{}/rdn.png".format('./image'))
-        # draw_features(64, x[0],"{}/x.png".format('./image'))
-        x = self.relu(self.bn3(self.conv3(torch.cat([x, rdn2],dim=1))))
-        x = self.maxpool(x)
-        x = self.layer1(x)
-        res2 = x
-        x = self.layer2(x)
-        res3 = x
-        x = self.layer3(x)
-        res4 = x
-        x = self.layer4(x)
-        x = self.res5_con1x1(torch.cat([x, res4], dim=1))
+    #     x = self.relu(self.bn2(self.conv2(torch.cat([x, rdn1],dim=1))))
+    #     # draw_features(64, rdn2[0],"{}/rdn.png".format('./image'))
+    #     # draw_features(64, x[0],"{}/x.png".format('./image'))
+    #     x = self.relu(self.bn3(self.conv3(torch.cat([x, rdn2],dim=1))))
+    #     x = self.maxpool(x)
+    #     x = self.layer1(x)
+    #     res2 = x
+    #     x = self.layer2(x)
+    #     res3 = x
+    #     x = self.layer3(x)
+    #     res4 = x
+    #     x = self.layer4(x)
+    #     x = self.res5_con1x1(torch.cat([x, res4], dim=1))
 
 		
-        return x, res3, res2, size_conv1
+    #     return x, res3, res2, size_conv1
 			
     def forward(self, x, y):
         

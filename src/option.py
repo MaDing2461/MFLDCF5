@@ -1,7 +1,13 @@
 import argparse
 import template
 
+
+
 parser = argparse.ArgumentParser(description='EDSR and MDSR')
+
+# heatmap
+parser.add_argument('--heatmap', type=str, default=False,
+                    help='turn on heatmap visualization')
 
 parser.add_argument('--debug', action='store_true',
                     help='Enables debug mode')

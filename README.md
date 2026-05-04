@@ -5,7 +5,7 @@ The code and datasets for Synergistic Optical-DSM Learning for Deepfake Geograph
 # Data preprocessing
 
 We will soon upload the datasets.
-<!-- Our datasets could be obtained from link: https://pan.baidu.com/s/1l5HUmTVScgO8OzwSlvLIxw?pwd=mdmd. Password：mdmd (./Fake-Vaihingen-MM & Fake-Potsdam-MM.zip) -->
+Our datasets could be obtained from link: https://pan.baidu.com/s/1l5HUmTVScgO8OzwSlvLIxw?pwd=mdmd. Password：mdmd (./Fake-Vaihingen-MM & Fake-Potsdam-MM.zip)
 
 Put them into ./data.
 
@@ -139,7 +139,7 @@ python src/test.py --dsm_option True --data_train Vaihingen --data_train_dir fak
 # Trained checkpoints
 
 We will soon upload the pretrain models.
-<!-- Our pretrain models could be obtained from link: https://pan.baidu.com/s/1l5HUmTVScgO8OzwSlvLIxw?pwd=mdmd. Password：mdmd (./MFLDCF_models.zip) -->
+Our pretrain models could be obtained from link: https://pan.baidu.com/s/1l5HUmTVScgO8OzwSlvLIxw?pwd=mdmd. Password：mdmd (./MFLDCF_models.zip)
 
 # BibTeX
 Will be available soon.

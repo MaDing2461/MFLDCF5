@@ -17,11 +17,14 @@ import time
 import torch
 import numpy as np
 
+from IPython.display import clear_output
+
+
 from utils.miou import get_iou,get_Acc
 interp = torch.nn.Upsample(size=(256, 256), mode='bilinear', align_corners=True)
 
 
-myid = ['24_1','24_2','24_3', '24_4', '1_1','1_2','1_3','1_4','5_2','5_3','65_1','65_2']
+# myid = ['24_1','24_2','24_3', '24_4', '1_1','1_2','1_3','1_4','5_2','5_3','65_1','65_2']
 
 class Trainer():
     def __init__(self, args, loader, my_model, my_loss, ckp):
@@ -270,7 +273,11 @@ class Trainer():
         
         # if (self.args.dsm_option) == True:
         else:
+            index = 0
             for idx_data, (lr, hr, real,filename, dsm)  in enumerate(self.loader_test):
+                # print('------------------------------------------------------')
+                # print('idx_data', idx_data)
+                # print('filename', filename)
                 # print('-'*50)
                 # print(lr.shape)
                 # print(dsm.shape)
@@ -283,9 +290,62 @@ class Trainer():
 
                 dsm, = self.prepare(dsm) 
                 hr_cacu = np.asarray(hr[0].cpu().numpy(), dtype=int)
-
+            # --------------------------------------------------------------------- 
+            # draw heatmap
                 # t1 = time.time()
-                result = self.model(lr, dsm)
+                if (self.args.heatmap) == False:
+                    result = self.model(lr, dsm)
+                elif (self.args.heatmap) == True:
+                    result, heatmap1, heatmap2, heatmap3 = self.model(lr, dsm)
+
+                    heatmap1 = cv2.resize(heatmap1, (256, 256))
+                    # heatmap[heatmap < 0.7] = 0
+                    heatmap1 = np.uint8(255 * heatmap1)
+                    heatmap1 = cv2.applyColorMap(heatmap1, cv2.COLORMAP_JET)
+                    heatmap1 = heatmap1[:, :, (2, 1, 0)]
+                    heatmap2 = cv2.resize(heatmap2, (256, 256))
+                    # heatmap[heatmap < 0.7] = 0
+                    heatmap2 = np.uint8(255 * heatmap2)
+                    heatmap2 = cv2.applyColorMap(heatmap2, cv2.COLORMAP_JET)
+                    heatmap2 = heatmap2[:, :, (2, 1, 0)]
+                    heatmap3 = cv2.resize(heatmap3, (256, 256))
+                    # heatmap[heatmap < 0.7] = 0
+                    heatmap3 = np.uint8(255 * heatmap3)
+                    heatmap3 = cv2.applyColorMap(heatmap3, cv2.COLORMAP_JET)
+                    heatmap3 = heatmap3[:, :, (2, 1, 0)]
+                    x_comp = 65
+                    y_comp = 100
+                    fig = plt.figure()
+
+                    fig.add_subplot(1, 5, 2)
+                    plt.imshow(heatmap1)
+                    # heatmap_str = './CFNet_features' + str(featureid) + '.jpg'
+                    # cv2.imwrite(heatmap_str, heatmap1)
+                    plt.gca().add_patch(plt.Rectangle((x_comp - 2, y_comp - 2), 2, 2, color='red', fill=False, linewidth=1))
+                    plt.axis('off')
+                    fig.add_subplot(1, 5, 3)
+                    plt.imshow(heatmap2)
+                    # heatmap_str = './CFNet_features' + str(featureid+1) + '.jpg'
+                    # cv2.imwrite(heatmap_str, heatmap2)
+                    plt.gca().add_patch(plt.Rectangle((x_comp - 2, y_comp - 2), 2, 2, color='red', fill=False, linewidth=1))
+                    plt.axis('off')
+                    fig.add_subplot(1, 5, 4)
+                    plt.imshow(heatmap3)
+                    # heatmap_str = './CFNet_features' + str(featureid+1) + '.jpg'
+                    # cv2.imwrite(heatmap_str, heatmap2)
+                    plt.gca().add_patch(plt.Rectangle((x_comp - 2, y_comp - 2), 2, 2, color='red', fill=False, linewidth=1))
+                    plt.axis('off')
+
+                    plt.show()
+                    # plt.savefig('heatmap.png', dpi=1200)
+                    plt.savefig('heatmap_f_tree'+str(index)+'.pdf', dpi=1200)
+                    index += 1
+
+                
+
+
+            # ---------------------------------------------------------------------
+
                 # result = self.model(lr)
                 # t2 = time.time()
                 # t_all.append(t2 - t1)
@@ -364,47 +424,47 @@ class Trainer():
         torch.set_grad_enabled(True)
         return 0.1,0.1, 0.1 #Not used, just for compatibility with the train function
     
-    def testimgae(self,best):
-        torch.set_grad_enabled(False)
+    # def testimgae(self,best):
+    #     torch.set_grad_enabled(False)
 
-        epoch = self.optimizer.get_last_epoch()
-        self.ckp.write_log('\nEvaluation:')
-        self.model.eval()
-        timer_test = utility.timer()
-        all_psnr = []
+    #     epoch = self.optimizer.get_last_epoch()
+    #     self.ckp.write_log('\nEvaluation:')
+    #     self.model.eval()
+    #     timer_test = utility.timer()
+    #     all_psnr = []
 
-        if self.args.save_results: self.ckp.begin_background()
-        for idx_data, (lr, hr, real,filename)  in enumerate(self.loader_test):
-            lr, hr = self.prepare(lr,hr)
+    #     if self.args.save_results: self.ckp.begin_background()
+    #     for idx_data, (lr, hr, real,filename)  in enumerate(self.loader_test):
+    #         lr, hr = self.prepare(lr,hr)
 
-            result,_ = self.model(lr)
-            pred = result.cpu().numpy()
-            hr = hr.cpu().numpy()
-            if(real.item()<0.5):
-                psnr = self.loss.calc_psnr(pred,hr)
-                all_psnr.append(psnr)
+    #         result,_ = self.model(lr)
+    #         pred = result.cpu().numpy()
+    #         hr = hr.cpu().numpy()
+    #         if(real.item()<0.5):
+    #             psnr = self.loss.calc_psnr(pred,hr)
+    #             all_psnr.append(psnr)
 
-            pred = np.round(pred[0]*255).clip(min=0, max=255).astype(np.uint8).transpose(1, 2, 0)
-            save_list = [pred]
-            if self.args.save_results:
-                self.ckp.save_results(self.args.data_train, filename, save_list, self.scale)
+    #         pred = np.round(pred[0]*255).clip(min=0, max=255).astype(np.uint8).transpose(1, 2, 0)
+    #         save_list = [pred]
+    #         if self.args.save_results:
+    #             self.ckp.save_results(self.args.data_train, filename, save_list, self.scale)
         
-        print('PSNR: {:.4f}'.format(np.mean(all_psnr)))
-        self.ckp.write_log('Forward: {:.2f}s\n'.format(timer_test.toc()))
-        self.ckp.write_log('Saving...')
+    #     print('PSNR: {:.4f}'.format(np.mean(all_psnr)))
+    #     self.ckp.write_log('Forward: {:.2f}s\n'.format(timer_test.toc()))
+    #     self.ckp.write_log('Saving...')
 
-        if self.args.save_results:
-            self.ckp.end_background()
+    #     if self.args.save_results:
+    #         self.ckp.end_background()
 
-        if not self.args.test_only:
-            self.ckp.save(self, epoch, is_best=0.1>best)
+    #     if not self.args.test_only:
+    #         self.ckp.save(self, epoch, is_best=0.1>best)
 
-        self.ckp.write_log(
-            'Total: {:.2f}s\n'.format(timer_test.toc()), refresh=True
-        )
+    #     self.ckp.write_log(
+    #         'Total: {:.2f}s\n'.format(timer_test.toc()), refresh=True
+    #     )
 
-        torch.set_grad_enabled(True)
-        return 0.1,0.1, 0.1
+    #     torch.set_grad_enabled(True)
+    #     return 0.1,0.1, 0.1
     
     def prepare(self, *args):
         device = torch.device('cpu' if self.args.cpu else 'cuda')
